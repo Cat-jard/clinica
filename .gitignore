@@ -49,6 +49,10 @@ pnpm-debug.log*
 .vscode/
 .idea/
 
+# local AI / workspace metadata
+.claude/
+.superpowers/
+
 # vercel
 .vercel
 
