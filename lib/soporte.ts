@@ -1,3 +1,8 @@
+// ============================================================
+// Integración con el microservicio soporte-service (puerto 8083)
+// ============================================================
+import { authFetchAt, errorMensaje } from '@/lib/auth';
+
 // ===================== TIPOS =====================
 
 export type NivelLog = 'INFO' | 'WARNING' | 'ERROR' | 'DEBUG';
@@ -242,3 +247,120 @@ export const BCP_CONTACTOS = [
 export const MODULOS_SISTEMA = ['Recepción', 'Triaje', 'Médico', 'Farmacia', 'Laboratorio', 'Radiología', 'Portal Paciente', 'Administración', 'RRHH'];
 export const ROLES_SISTEMA = ['Recepción', 'Enfermería', 'Médico', 'Radiólogo', 'Laboratorio', 'Farmacia', 'Admin', 'Soporte'];
 export const TECNICOS = ['Carlos Yupanqui', 'Ana Lúcar', 'Sin asignar'];
+
+// Categorías reconocidas por el soporte-service (coinciden con el enum CategoriaTicket).
+export const CATEGORIAS_TICKET = ['Hardware', 'Software', 'Red / Conectividad', 'Accesos / Cuentas', 'Otro'];
+
+// ============================================================
+// API REST — soporte-service
+// ============================================================
+
+export const SOPORTE_URL =
+  process.env.NEXT_PUBLIC_SOPORTE_URL ?? 'http://localhost:8083';
+
+// ---- Forma que devuelve el backend (TicketResponse) ----
+interface TicketApi {
+  id: string;
+  codigo: string;
+  titulo: string;
+  descripcion: string;
+  solicitanteDni: string | null;
+  solicitanteNombre: string;
+  categoria: string;     // etiqueta: "Hardware"
+  prioridad: string;     // etiqueta: "Alta"
+  estado: string;        // etiqueta: "En proceso"
+  asignadoA: string;     // "Sin asignar" si no tiene
+  fechaCreacion: string;
+  fechaActualizacion: string;
+}
+
+// El backend usa "En proceso"; la UI usa "En Progreso".
+function estadoApiToUi(estado: string): EstadoTicket {
+  return estado === 'En proceso' ? 'En Progreso' : (estado as EstadoTicket);
+}
+
+// La UI envía la etiqueta; el backend acepta el nombre del enum (más robusto).
+const ESTADO_UI_TO_API: Record<EstadoTicket, string> = {
+  'Abierto': 'ABIERTO', 'En Progreso': 'EN_PROCESO', 'Resuelto': 'RESUELTO', 'Cerrado': 'CERRADO',
+};
+const PRIORIDAD_UI_TO_API: Record<PrioridadTicket, string> = {
+  'Baja': 'BAJA', 'Media': 'MEDIA', 'Alta': 'ALTA', 'Crítica': 'CRITICA',
+};
+const CATEGORIA_ETIQUETA_TO_API: Record<string, string> = {
+  'Hardware': 'HARDWARE', 'Software': 'SOFTWARE', 'Red / Conectividad': 'RED',
+  'Accesos / Cuentas': 'ACCESO', 'Otro': 'OTRO',
+};
+
+function apiToTicket(t: TicketApi): Ticket {
+  return {
+    id: t.id,
+    nroTicket: t.codigo,
+    titulo: t.titulo,
+    descripcion: t.descripcion,
+    reportadoPor: t.solicitanteNombre,
+    rolReporta: t.solicitanteDni ? `DNI ${t.solicitanteDni}` : '',
+    fechaReporte: t.fechaCreacion,
+    prioridad: t.prioridad as PrioridadTicket,
+    estado: estadoApiToUi(t.estado),
+    asignadoA: t.asignadoA && t.asignadoA !== 'Sin asignar' ? t.asignadoA : undefined,
+    modulo: t.categoria,
+  };
+}
+
+/** Lista tickets (requiere usuario autenticado). */
+export async function listarTickets(filtroEstado?: string, q?: string): Promise<Ticket[]> {
+  const params = new URLSearchParams();
+  if (filtroEstado && filtroEstado !== 'Todos') {
+    params.set('estado', ESTADO_UI_TO_API[filtroEstado as EstadoTicket] ?? filtroEstado);
+  }
+  if (q) params.set('q', q);
+  const query = params.toString() ? `?${params.toString()}` : '';
+
+  const res = await authFetchAt(SOPORTE_URL, `/api/tickets${query}`);
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron cargar los tickets'));
+  const data = (await res.json()) as TicketApi[];
+  return data.map(apiToTicket);
+}
+
+/** Abre un nuevo ticket. */
+export async function crearTicket(t: Ticket): Promise<Ticket> {
+  const res = await authFetchAt(SOPORTE_URL, '/api/tickets', {
+    method: 'POST',
+    body: JSON.stringify({
+      titulo: t.titulo,
+      descripcion: t.descripcion,
+      solicitanteNombre: t.reportadoPor,
+      categoria: CATEGORIA_ETIQUETA_TO_API[t.modulo] ?? 'OTRO',
+      prioridad: PRIORIDAD_UI_TO_API[t.prioridad],
+    }),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo crear el ticket'));
+  return apiToTicket((await res.json()) as TicketApi);
+}
+
+/** Actualiza los datos de un ticket (ADMIN/SOPORTE). */
+export async function actualizarTicket(id: string, t: Ticket): Promise<Ticket> {
+  const res = await authFetchAt(SOPORTE_URL, `/api/tickets/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      titulo: t.titulo,
+      descripcion: t.descripcion,
+      categoria: CATEGORIA_ETIQUETA_TO_API[t.modulo] ?? 'OTRO',
+      prioridad: PRIORIDAD_UI_TO_API[t.prioridad],
+      estado: ESTADO_UI_TO_API[t.estado],
+      asignadoA: t.asignadoA ?? '',
+    }),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo actualizar el ticket'));
+  return apiToTicket((await res.json()) as TicketApi);
+}
+
+/** Cambia el estado de un ticket, opcionalmente asignándolo (ADMIN/SOPORTE). */
+export async function cambiarEstadoTicket(id: string, estado: EstadoTicket, asignadoA?: string): Promise<Ticket> {
+  const res = await authFetchAt(SOPORTE_URL, `/api/tickets/${id}/estado`, {
+    method: 'PATCH',
+    body: JSON.stringify({ estado: ESTADO_UI_TO_API[estado], asignadoA }),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo cambiar el estado'));
+  return apiToTicket((await res.json()) as TicketApi);
+}
