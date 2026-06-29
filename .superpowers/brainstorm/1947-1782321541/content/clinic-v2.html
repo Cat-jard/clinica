@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clínica 3D</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f0f1a;
+  color: white;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── NAVBAR ─── */
+.navbar {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 60px;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+
+.nav-logo {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #c4b5fd, #93c5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+}
+
+.nav-links {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-link {
+  padding: 6px 16px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.55);
+  transition: all 0.25s;
+}
+.nav-link:hover { color: white; background: rgba(255,255,255,0.08); }
+.nav-link.active {
+  background: white;
+  color: #0f0f1a;
+  font-weight: 700;
+}
+
+/* ─── HERO SCENE ─── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 100px 40px 60px;
+  overflow: hidden;
+}
+
+/* Background glow blobs */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+.blob-1 { width: 500px; height: 500px; background: #7c3aed; top: -100px; left: -150px; }
+.blob-2 { width: 400px; height: 400px; background: #2563eb; bottom: -100px; right: -100px; }
+.blob-3 { width: 300px; height: 300px; background: #059669; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+/* Hero title */
+.hero-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 16px;
+}
+
+.hero-title {
+  font-size: clamp(32px, 5vw, 56px);
+  font-weight: 900;
+  text-align: center;
+  line-height: 1.05;
+  letter-spacing: -2px;
+  margin-bottom: 20px;
+}
+.hero-title .grad {
+  background: linear-gradient(135deg, #c4b5fd 0%, #93c5fd 50%, #6ee7b7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  font-size: 16px;
+  color: rgba(255,255,255,0.45);
+  text-align: center;
+  max-width: 420px;
+  line-height: 1.6;
+  margin-bottom: 56px;
+}
+
+/* ─── ROOMS ─── */
+.rooms-wrap {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: center;
+  perspective: 1200px;
+  margin-bottom: 48px;
+}
+
+.room {
+  width: 148px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  animation: floatUp 4s ease-in-out infinite;
+}
+.room:nth-child(1) { animation-delay: 0s; }
+.room:nth-child(2) { animation-delay: 0.6s; transform: translateY(-12px); }
+.room:nth-child(3) { animation-delay: 1.2s; }
+.room:nth-child(4) { animation-delay: 0.9s; transform: translateY(-8px); }
+.room:nth-child(5) { animation-delay: 0.3s; }
+
+.room:hover { transform: translateY(-24px) scale(1.06) !important; }
+
+@keyframes floatUp {
+  0%, 100% { transform: translateY(var(--base-y, 0px)); }
+  50% { transform: translateY(calc(var(--base-y, 0px) - 10px)); }
+}
+
+/* ── ISO BOX ── */
+.iso {
+  width: 100%;
+  height: 130px;
+  position: relative;
+  margin-bottom: -2px;
+}
+
+/* top face */
+.face-top {
+  position: absolute;
+  width: 88px;
+  height: 44px;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 6px 6px 0 0;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+/* front face */
+.face-front {
+  position: absolute;
+  bottom: 0;
+  left: 14px;
+  width: 74px;
+  height: 72px;
+  border-radius: 0 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 8px;
+  position: relative;
+}
+
+/* right face */
+.face-right {
+  position: absolute;
+  bottom: 0;
+  right: 14px;
+  width: 40px;
+  height: 72px;
+  border-radius: 0 0 8px 0;
+}
+
+/* Better 3D box */
+.box-3d {
+  position: relative;
+  width: 100%;
+  height: 110px;
+  margin-bottom: 0;
+}
+
+.b-top {
+  position: absolute;
+  top: 0; left: 12px;
+  width: calc(100% - 24px);
+  height: 40px;
+  transform: perspective(300px) rotateX(50deg) translateY(-4px);
+  transform-origin: bottom center;
+  border-radius: 10px 10px 0 0;
+}
+.b-front {
+  position: absolute;
+  bottom: 0; left: 0;
+  width: 78%;
+  height: 75px;
+  border-radius: 0 0 0 14px;
+  display: flex;
+  align-items: flex-end;
+  padding: 10px;
+  gap: 6px;
+}
+.b-side {
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 24%;
+  height: 75px;
+  border-radius: 0 0 14px 0;
+}
+
+/* Windows on front face */
+.win {
+  width: 18px; height: 14px;
+  background: rgba(255,255,255,0.35);
+  border-radius: 3px;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+}
+.win.tall { width: 14px; height: 20px; border-radius: 3px 3px 0 0; }
+
+/* Colors per room */
+.r1 .b-top   { background: #ddd6fe; }
+.r1 .b-front { background: #c4b5fd; }
+.r1 .b-side  { background: #a78bfa; }
+
+.r2 .b-top   { background: #bbf7d0; }
+.r2 .b-front { background: #86efac; }
+.r2 .b-side  { background: #4ade80; }
+
+.r3 .b-top   { background: #bfdbfe; }
+.r3 .b-front { background: #93c5fd; }
+.r3 .b-side  { background: #60a5fa; }
+
+.r4 .b-top   { background: #fecaca; }
+.r4 .b-front { background: #fca5a5; }
+.r4 .b-side  { background: #f87171; }
+
+.r5 .b-top   { background: #fef08a; }
+.r5 .b-front { background: #fde047; }
+.r5 .b-side  { background: #facc15; }
+
+/* Roof element */
+.roof {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+}
+
+/* ── ROOM CARD BELOW BOX ── */
+.room-label {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 14px 12px;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  margin-top: 10px;
+}
+.room-label .name {
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.3px;
+}
+.room-label .desc {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  margin-top: 3px;
+}
+.room-label .pill {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.r1 .pill { background: rgba(196,181,253,0.2); color: #c4b5fd; }
+.r2 .pill { background: rgba(134,239,172,0.2); color: #86efac; }
+.r3 .pill { background: rgba(147,197,253,0.2); color: #93c5fd; }
+.r4 .pill { background: rgba(252,165,165,0.2); color: #fca5a5; }
+.r5 .pill { background: rgba(253,224,71,0.2);  color: #fde047; }
+
+/* ── ACTIVE GLOW ── */
+.room.active .box-3d { filter: drop-shadow(0 0 20px currentColor); }
+.r3.active { --glow: #60a5fa; }
+
+/* ─── CAMERA PATH ─── */
+.cam-path {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 60px;
+  padding: 10px 24px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.3px;
+}
+.cam-path .icon { font-size: 14px; }
+.cam-dot-row { display: flex; gap: 6px; align-items: center; }
+.cd {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.cd-arrow { color: rgba(255,255,255,0.2); font-size: 10px; }
+
+/* ─── BOTTOM FEATURES ─── */
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 40px 60px;
+  position: relative;
+  z-index: 2;
+}
+
+.feat {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 24px;
+  transition: all 0.3s;
+}
+.feat:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.15);
+  transform: translateY(-4px);
+}
+.feat-icon { font-size: 26px; margin-bottom: 12px; }
+.feat h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.feat p { font-size: 12px; color: rgba(255,255,255,0.45); line-height: 1.6; }
+
+/* ─── CTA ─── */
+.cta-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 56px;
+  position: relative;
+  z-index: 2;
+}
+.btn-primary {
+  padding: 13px 28px;
+  border-radius: 40px;
+  background: white;
+  color: #0f0f1a;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(255,255,255,0.15);
+  transition: all 0.2s;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(255,255,255,0.25); }
+.btn-ghost {
+  padding: 13px 28px;
+  border-radius: 40px;
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.06); color: white; }
+
+/* scroll dots */
+.scroll-dots {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.sdot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+}
+.sdot.active { background: white; width: 20px; border-radius: 3px; }
+
+/* Stars bg */
+.stars {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.star {
+  position: absolute;
+  width: 2px; height: 2px;
+  background: white;
+  border-radius: 50%;
+  opacity: 0;
+  animation: twinkle 3s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.4; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-logo">✦ ClinicaApp</div>
+  <div class="nav-links">
+    <button class="nav-link">Recepción</button>
+    <button class="nav-link">Consulta</button>
+    <button class="nav-link active">Laboratorio</button>
+    <button class="nav-link">Urgencias</button>
+    <button class="nav-link">Farmacia</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+
+  <!-- Background -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="stars" id="stars"></div>
+
+  <p class="hero-eyebrow">Bienvenido a nuestra clínica</p>
+
+  <h1 class="hero-title">
+    Tu salud,<br>
+    <span class="grad">en un mundo diferente</span>
+  </h1>
+
+  <p class="hero-sub">
+    Explora nuestros servicios como nunca antes. Navega entre habitaciones, descubre cada área y agenda tu cita.
+  </p>
+
+  <div class="cta-row">
+    <button class="btn-primary">Agenda tu cita →</button>
+    <button class="btn-ghost">Explorar servicios</button>
+  </div>
+
+  <!-- ROOMS -->
+  <div class="rooms-wrap">
+
+    <!-- Recepción -->
+    <div class="room r1">
+      <div class="box-3d">
+        <div class="roof">🛎️</div>
+        <div class="b-top"></div>
+        <div class="b-front">
+          <div class="win"></div>
+          <div class="win tall"></div>
+        </div>
+        <div class="b-side"></div>
+      </div>
+      <div class="room-label">
+        <div class="name">Recepción</div>
+        <div class="desc">Agenda tu cita</div>
+        <span class="pill">Lavanda</span>
+      </div>
+    </div>
+
+    <!-- Consulta -->
+    <div class="room r2">
+      <div class="box-3d">
+        <div class="roof">🩺</div>
+        <div class="b-top"></div>
+        <div class="b-front">
+          <div class="win"></div>
+          <div class="win"></div>
+        </div>
+        <div class="b-side"></div>
+      </div>
+      <div class="room-label">
+        <div class="name">Consulta</div>
+        <div class="desc">Médico general</div>
+        <span class="pill">Menta</span>
+      </div>
+    </div>
+
+    <!-- Laboratorio (active/highlighted) -->
+    <div class="room r3 active" style="transform: translateY(-20px) scale(1.05);">
+      <div class="box-3d" style="filter: drop-shadow(0 0 24px rgba(96,165,250,0.5));">
+        <div class="roof">🔬</div>
+        <div class="b-top"></div>
+        <div class="b-front">
+          <div class="win tall"></div>
+          <div class="win"></div>
+        </div>
+        <div class="b-side"></div>
+      </div>
+      <div class="room-label" style="border-color: rgba(147,197,253,0.3); background: rgba(147,197,253,0.1);">
+        <div class="name">Laboratorio</div>
+        <div class="desc">Análisis clínicos</div>
+        <span class="pill">Azul bebé</span>
+      </div>
+    </div>
+
+    <!-- Urgencias -->
+    <div class="room r4">
+      <div class="box-3d">
+        <div class="roof">🚑</div>
+        <div class="b-top"></div>
+        <div class="b-front">
+          <div class="win"></div>
+          <div class="win tall"></div>
+        </div>
+        <div class="b-side"></div>
+      </div>
+      <div class="room-label">
+        <div class="name">Urgencias</div>
+        <div class="desc">24 horas</div>
+        <span class="pill">Melocotón</span>
+      </div>
+    </div>
+
+    <!-- Farmacia -->
+    <div class="room r5">
+      <div class="box-3d">
+        <div class="roof">💊</div>
+        <div class="b-top"></div>
+        <div class="b-front">
+          <div class="win"></div>
+          <div class="win"></div>
+        </div>
+        <div class="b-side"></div>
+      </div>
+      <div class="room-label">
+        <div class="name">Farmacia</div>
+        <div class="desc">Integrada</div>
+        <span class="pill">Amarillo</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Camera path -->
+  <div class="cam-path">
+    <span class="icon">🎥</span>
+    Cámara fluida entre habitaciones:
+    <div class="cam-dot-row">
+      <span class="cd" style="background:#c4b5fd"></span>
+      <span class="cd-arrow">›</span>
+      <span class="cd" style="background:#86efac"></span>
+      <span class="cd-arrow">›</span>
+      <span class="cd" style="background:#93c5fd; box-shadow: 0 0 8px #93c5fd;"></span>
+      <span class="cd-arrow">›</span>
+      <span class="cd" style="background:#fca5a5"></span>
+      <span class="cd-arrow">›</span>
+      <span class="cd" style="background:#fde047"></span>
+    </div>
+    800ms · CatmullRomCurve3 · easeInOutCubic
+  </div>
+
+  <!-- Scroll dots -->
+  <div class="scroll-dots">
+    <div class="sdot active"></div>
+    <div class="sdot"></div>
+    <div class="sdot"></div>
+    <div class="sdot"></div>
+    <div class="sdot"></div>
+  </div>
+
+</section>
+
+<!-- FEATURES -->
+<section class="features">
+  <div class="feat">
+    <div class="feat-icon">🎥</div>
+    <h4>Cámara cinematográfica</h4>
+    <p>Movimiento fluido entre cada servicio usando curvas CatmullRom. Transiciones de 800ms con easing personalizado.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">🃏</div>
+    <h4>Tarjetas 3D flotantes</h4>
+    <p>Elementos HTML anclados al espacio 3D con &lt;Html&gt; de drei. Animación de flotación perpetua en loop.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">🌈</div>
+    <h4>Paleta pastel tranquila</h4>
+    <p>Cinco colores suaves asignados a cada habitación. Fondo oscuro que hace los colores resaltar con elegancia.</p>
+  </div>
+</section>
+
+<script>
+// Generate twinkling stars
+const container = document.getElementById('stars');
+for (let i = 0; i < 80; i++) {
+  const star = document.createElement('div');
+  star.className = 'star';
+  star.style.left = Math.random() * 100 + '%';
+  star.style.top = Math.random() * 100 + '%';
+  star.style.animationDelay = Math.random() * 4 + 's';
+  star.style.animationDuration = (2 + Math.random() * 3) + 's';
+  container.appendChild(star);
+}
+
+// Room hover interaction
+document.querySelectorAll('.room').forEach((room, i) => {
+  room.addEventListener('mouseenter', () => {
+    document.querySelectorAll('.nav-link')[i].classList.add('active');
+  });
+  room.addEventListener('mouseleave', () => {
+    document.querySelectorAll('.nav-link').forEach((l, j) => {
+      l.classList.toggle('active', j === 2);
+    });
+  });
+});
+</script>
+
+</body>
+</html>

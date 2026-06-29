@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clínica 3D — Vista previa del diseño</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f4f8;
+    color: #1a1a2e;
+    min-height: 100vh;
+  }
+
+  .page-header {
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .page-header h1 { font-size: 15px; font-weight: 600; color: #1a1a2e; }
+  .page-header .badge {
+    background: #7c3aed;
+    color: white;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .preview-wrap {
+    padding: 32px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* ── BROWSER FRAME ── */
+  .browser-frame {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+  }
+  .browser-bar {
+    background: #f1f3f5;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .browser-bar .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #ffbd2e; }
+  .dot-g { background: #28c840; }
+  .browser-bar .url-bar {
+    flex: 1;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: #666;
+    margin: 0 12px;
+  }
+
+  /* ── SITE INSIDE FRAME ── */
+  .site {
+    background: linear-gradient(135deg, #f8f0ff 0%, #e8f4ff 50%, #f0fff8 100%);
+    min-height: 580px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* NAV */
+  .site-nav {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.8);
+  }
+  .nav-logo {
+    font-size: 18px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #7c3aed, #2563eb);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .nav-pills {
+    display: flex;
+    gap: 8px;
+  }
+  .nav-pill {
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+  .nav-pill.active { background: #7c3aed; color: white; }
+  .nav-pill:not(.active) { background: rgba(255,255,255,0.8); color: #555; border: 1px solid rgba(0,0,0,0.08); }
+
+  /* SCENE 3D MOCKUP */
+  .scene-3d {
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .scene-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #9ca3af;
+  }
+
+  /* ISOMETRIC GRID OF ROOMS */
+  .rooms-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  .room {
+    border-radius: 20px;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    border: 2px solid transparent;
+    animation: floatRoom 3s ease-in-out infinite;
+  }
+  .room:nth-child(2) { animation-delay: 0.4s; }
+  .room:nth-child(3) { animation-delay: 0.8s; }
+  .room:nth-child(4) { animation-delay: 1.2s; }
+  .room:nth-child(5) { animation-delay: 1.6s; }
+
+  @keyframes floatRoom {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-6px); }
+  }
+
+  .room:hover {
+    transform: translateY(-10px) scale(1.04);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    border-color: rgba(255,255,255,0.9);
+  }
+
+  .room-1 { background: linear-gradient(145deg, #f0e6ff, #e3ccff); }
+  .room-2 { background: linear-gradient(145deg, #d5f5e3, #b8f0d0); }
+  .room-3 { background: linear-gradient(145deg, #dbeafe, #bfdbfe); }
+  .room-4 { background: linear-gradient(145deg, #fde8d8, #fcd6b8); }
+  .room-5 { background: linear-gradient(145deg, #fefce8, #fef08a); }
+
+  .room-emoji { font-size: 32px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1)); }
+
+  .room-card {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(8px);
+    border-radius: 14px;
+    padding: 10px 14px;
+    text-align: center;
+    width: 100%;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  }
+  .room-card h4 { font-size: 12px; font-weight: 700; color: #1a1a2e; }
+  .room-card p { font-size: 10px; color: #6b7280; margin-top: 2px; }
+
+  .room-3d-box {
+    width: 80px;
+    height: 60px;
+    position: relative;
+    margin: 4px 0;
+  }
+
+  /* Simple 3D box illusion */
+  .box-top {
+    position: absolute;
+    width: 60px;
+    height: 30px;
+    top: 0; left: 10px;
+    border-radius: 6px 6px 0 0;
+    transform: perspective(200px) rotateX(40deg);
+  }
+  .box-front {
+    position: absolute;
+    width: 60px;
+    height: 32px;
+    bottom: 0; left: 10px;
+    border-radius: 0 0 6px 6px;
+  }
+  .box-side {
+    position: absolute;
+    width: 14px;
+    height: 32px;
+    bottom: 0; right: 6px;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .room-1 .box-top    { background: #d8b4fe; }
+  .room-1 .box-front  { background: #c084fc; }
+  .room-1 .box-side   { background: #a855f7; }
+
+  .room-2 .box-top    { background: #86efac; }
+  .room-2 .box-front  { background: #4ade80; }
+  .room-2 .box-side   { background: #22c55e; }
+
+  .room-3 .box-top    { background: #93c5fd; }
+  .room-3 .box-front  { background: #60a5fa; }
+  .room-3 .box-side   { background: #3b82f6; }
+
+  .room-4 .box-top    { background: #fca5a5; }
+  .room-4 .box-front  { background: #f87171; }
+  .room-4 .box-side   { background: #ef4444; }
+
+  .room-5 .box-top    { background: #fde68a; }
+  .room-5 .box-front  { background: #fbbf24; }
+  .room-5 .box-side   { background: #f59e0b; }
+
+  /* Window & door on boxes */
+  .box-window {
+    position: absolute;
+    width: 12px; height: 10px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 2px;
+    top: 6px; left: 12px;
+  }
+  .box-door {
+    position: absolute;
+    width: 10px; height: 14px;
+    background: rgba(255,255,255,0.5);
+    border-radius: 2px 2px 0 0;
+    bottom: 0; left: 24px;
+  }
+
+  /* CAMERA PATH INDICATOR */
+  .camera-path {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 4px;
+  }
+  .camera-path .arrow {
+    color: #7c3aed;
+    font-weight: bold;
+  }
+  .cam-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  /* BOTTOM SECTION */
+  .site-bottom {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 0 32px 24px;
+  }
+
+  .info-card {
+    background: rgba(255,255,255,0.75);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  }
+  .info-card h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #1a1a2e;
+  }
+
+  .tech-tag {
+    display: inline-block;
+    background: rgba(124,58,237,0.1);
+    color: #7c3aed;
+    border-radius: 8px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 3px 2px;
+  }
+
+  .flow-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 12px;
+    color: #374151;
+  }
+  .flow-step .num {
+    width: 20px; height: 20px;
+    background: linear-gradient(135deg, #7c3aed, #2563eb);
+    color: white;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* SCROLL INDICATOR */
+  .scroll-hint {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    opacity: 0.5;
+  }
+  .scroll-hint span { font-size: 10px; color: #6b7280; }
+  .scroll-mouse {
+    width: 16px; height: 24px;
+    border: 2px solid #9ca3af;
+    border-radius: 10px;
+    position: relative;
+  }
+  .scroll-mouse::after {
+    content: '';
+    width: 3px; height: 6px;
+    background: #9ca3af;
+    border-radius: 2px;
+    position: absolute;
+    top: 4px; left: 50%; transform: translateX(-50%);
+    animation: scrollDown 1.5s ease-in-out infinite;
+  }
+  @keyframes scrollDown {
+    0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  }
+
+  /* LEGEND */
+  .legend {
+    padding: 20px 32px;
+    background: white;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    border-top: 1px solid #f1f3f5;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #374151;
+  }
+  .legend-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .l1 { background: #d8b4fe; }
+  .l2 { background: #86efac; }
+  .l3 { background: #93c5fd; }
+  .l4 { background: #fca5a5; }
+  .l5 { background: #fde68a; }
+
+  /* ANNOTATION SECTION */
+  .annotations {
+    padding: 24px 32px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+  }
+  .annotations h2 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #1a1a2e;
+  }
+  .ann-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .ann-item {
+    background: white;
+    border-radius: 14px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+  }
+  .ann-icon { font-size: 22px; margin-bottom: 8px; }
+  .ann-item h4 { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+  .ann-item p { font-size: 11px; color: #6b7280; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Clínica 3D — Vista previa del diseño</h1>
+  <span class="badge">MOCKUP</span>
+</div>
+
+<div class="preview-wrap">
+
+  <!-- BROWSER FRAME -->
+  <div class="browser-frame">
+    <div class="browser-bar">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+      <div class="url-bar">localhost:3000</div>
+    </div>
+
+    <div class="site">
+
+      <!-- NAV -->
+      <nav class="site-nav">
+        <div class="nav-logo">🏥 ClinicaApp</div>
+        <div class="nav-pills">
+          <button class="nav-pill active">Recepción</button>
+          <button class="nav-pill">Consulta</button>
+          <button class="nav-pill">Laboratorio</button>
+          <button class="nav-pill">Urgencias</button>
+          <button class="nav-pill">Farmacia</button>
+        </div>
+      </nav>
+
+      <!-- 3D SCENE -->
+      <div class="scene-3d">
+        <div class="scene-label">Explora nuestros servicios — haz clic en cualquier habitación</div>
+
+        <div class="rooms-grid">
+
+          <!-- Room 1: Recepción -->
+          <div class="room room-1">
+            <div class="room-emoji">🛎️</div>
+            <div class="room-3d-box">
+              <div class="box-top"></div>
+              <div class="box-front">
+                <div class="box-window"></div>
+                <div class="box-door"></div>
+              </div>
+              <div class="box-side"></div>
+            </div>
+            <div class="room-card">
+              <h4>Recepción</h4>
+              <p>Agenda tu cita</p>
+            </div>
+          </div>
+
+          <!-- Room 2: Consulta -->
+          <div class="room room-2">
+            <div class="room-emoji">🩺</div>
+            <div class="room-3d-box">
+              <div class="box-top"></div>
+              <div class="box-front">
+                <div class="box-window"></div>
+                <div class="box-door"></div>
+              </div>
+              <div class="box-side"></div>
+            </div>
+            <div class="room-card">
+              <h4>Consulta</h4>
+              <p>Médico general</p>
+            </div>
+          </div>
+
+          <!-- Room 3: Laboratorio -->
+          <div class="room room-3">
+            <div class="room-emoji">🔬</div>
+            <div class="room-3d-box">
+              <div class="box-top"></div>
+              <div class="box-front">
+                <div class="box-window"></div>
+                <div class="box-door"></div>
+              </div>
+              <div class="box-side"></div>
+            </div>
+            <div class="room-card">
+              <h4>Laboratorio</h4>
+              <p>Análisis clínicos</p>
+            </div>
+          </div>
+
+          <!-- Room 4: Urgencias -->
+          <div class="room room-4">
+            <div class="room-emoji">🚑</div>
+            <div class="room-3d-box">
+              <div class="box-top"></div>
+              <div class="box-front">
+                <div class="box-window"></div>
+                <div class="box-door"></div>
+              </div>
+              <div class="box-side"></div>
+            </div>
+            <div class="room-card">
+              <h4>Urgencias</h4>
+              <p>24 horas</p>
+            </div>
+          </div>
+
+          <!-- Room 5: Farmacia -->
+          <div class="room room-5">
+            <div class="room-emoji">💊</div>
+            <div class="room-3d-box">
+              <div class="box-top"></div>
+              <div class="box-front">
+                <div class="box-window"></div>
+                <div class="box-door"></div>
+              </div>
+              <div class="box-side"></div>
+            </div>
+            <div class="room-card">
+              <h4>Farmacia</h4>
+              <p>Integrada</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Camera path hint -->
+        <div class="camera-path">
+          <span class="cam-dot" style="background:#d8b4fe"></span>
+          <span class="arrow">→</span>
+          <span class="cam-dot" style="background:#86efac"></span>
+          <span class="arrow">→</span>
+          <span class="cam-dot" style="background:#93c5fd"></span>
+          <span class="arrow">→</span>
+          <span class="cam-dot" style="background:#fca5a5"></span>
+          <span class="arrow">→</span>
+          <span class="cam-dot" style="background:#fde68a"></span>
+          <span style="margin-left:6px; font-size:11px; color:#9ca3af">Cámara viaja suavemente entre habitaciones (800ms easing)</span>
+        </div>
+
+      </div>
+
+      <!-- INFO CARDS BELOW -->
+      <div class="site-bottom">
+        <div class="info-card">
+          <h3>Stack técnico</h3>
+          <span class="tech-tag">Next.js 16</span>
+          <span class="tech-tag">React 19</span>
+          <span class="tech-tag">Three.js</span>
+          <span class="tech-tag">@react-three/fiber</span>
+          <span class="tech-tag">@react-three/drei</span>
+          <span class="tech-tag">Framer Motion</span>
+          <span class="tech-tag">Tailwind v4</span>
+          <span class="tech-tag">TypeScript</span>
+        </div>
+        <div class="info-card">
+          <h3>Flujo de navegación</h3>
+          <div class="flow-step"><div class="num">1</div>Vista panorámica isométrica de todas las rooms</div>
+          <div class="flow-step"><div class="num">2</div>Usuario hace scroll o click en una habitación</div>
+          <div class="flow-step"><div class="num">3</div>Cámara viaja con CatmullRomCurve3 (800ms)</div>
+          <div class="flow-step"><div class="num">4</div>Tarjeta UI flotante &lt;Html&gt; aparece con info del servicio</div>
+          <div class="flow-step"><div class="num">5</div>Botón "Saber más" / "Agendar" disponible</div>
+        </div>
+      </div>
+
+      <!-- Scroll hint -->
+      <div class="scroll-hint">
+        <div class="scroll-mouse"></div>
+        <span>scroll para explorar</span>
+      </div>
+
+    </div>
+
+    <!-- LEGEND -->
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot l1"></div>Lavanda — Recepción</div>
+      <div class="legend-item"><div class="legend-dot l2"></div>Menta — Consulta</div>
+      <div class="legend-item"><div class="legend-dot l3"></div>Azul bebé — Lab</div>
+      <div class="legend-item"><div class="legend-dot l4"></div>Melocotón — Urgencias</div>
+      <div class="legend-item"><div class="legend-dot l5"></div>Amarillo — Farmacia</div>
+    </div>
+  </div><!-- /browser-frame -->
+
+  <!-- ANNOTATIONS -->
+  <div class="annotations" style="border-radius:0 0 16px 16px; margin-top:0;">
+    <h2>Notas de diseño</h2>
+    <div class="ann-grid">
+      <div class="ann-item">
+        <div class="ann-icon">🎥</div>
+        <h4>Movimiento de cámara</h4>
+        <p>THREE.CatmullRomCurve3 traza la ruta entre habitaciones. useSpring de Framer Motion controla el timing (800ms, easeInOutCubic). Navbar sincroniza la posición activa.</p>
+      </div>
+      <div class="ann-item">
+        <div class="ann-icon">🃏</div>
+        <h4>Tarjetas flotantes HTML</h4>
+        <p>&lt;Html&gt; de @react-three/drei ancla elementos React al espacio 3D. Animación: translateY -8px → 0 en bucle de 3s. backdrop-blur + white/80 para legibilidad.</p>
+      </div>
+      <div class="ann-item">
+        <div class="ann-icon">📱</div>
+        <h4>Responsive</h4>
+        <p>Mobile: pixel ratio 0.75, rooms en grid 2x3, cámara más cercana. Tablet: 3 columns. Desktop: 5 en línea. Touch events reemplazan scroll wheel en móvil.</p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /preview-wrap -->
+
+</body>
+</html>
