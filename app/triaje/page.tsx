@@ -1,34 +1,34 @@
 'use client';
 
 import { useState } from 'react';
-import KpiCards          from '@/components/triaje/KpiCards';
-import ColaTriaje        from '@/components/triaje/ColaTriaje';
+import KpiCards from '@/components/triaje/KpiCards';
+import ColaTriaje from '@/components/triaje/ColaTriaje';
 import ClasificadosTable from '@/components/triaje/ClasificadosTable';
-import PriorityDonut     from '@/components/triaje/charts/PriorityDonut';
+import PriorityDonut from '@/components/triaje/charts/PriorityDonut';
 import HourlyArrivalsChart from '@/components/triaje/charts/HourlyArrivalsChart';
-import TriageTimeChart   from '@/components/triaje/charts/TriageTimeChart';
-import SpO2Gauge         from '@/components/triaje/charts/SpO2Gauge';
-import TopMotivoChart    from '@/components/triaje/charts/TopMotivoChart';
+import TriageTimeChart from '@/components/triaje/charts/TriageTimeChart';
+import SpO2Gauge from '@/components/triaje/charts/SpO2Gauge';
+import TopMotivoChart from '@/components/triaje/charts/TopMotivoChart';
 import { PacienteEspera, PacienteClasificado } from '@/lib/vitals';
 
 const MOCK_COLA: PacienteEspera[] = [
-  { id: '1', ticket: 'T-001', nombre: 'Carlos Rodríguez',   dni: '34567890', fechaNac: '1978-11-08', horaLlegada: '08:05', motivo: 'Dolor abdominal agudo'     },
-  { id: '2', ticket: 'T-002', nombre: 'Ana Fernández Díaz', dni: '45678901', fechaNac: '1995-01-30', horaLlegada: '08:42', motivo: 'Dificultad para respirar'  },
-  { id: '3', ticket: 'T-003', nombre: 'Pedro Martínez',     dni: '56789012', fechaNac: '1982-06-14', horaLlegada: '09:10', motivo: 'Cefalea intensa'            },
+  { id: '1', ticket: 'T-0001', nombre: 'Carlos Rodríguez', dni: '34567890', fechaNac: '1978-11-08', horaLlegada: '08:05', motivo: 'Dolor abdominal agudo' },
+  { id: '2', ticket: 'T-0002', nombre: 'Ana Fernández Díaz', dni: '45678901', fechaNac: '1995-01-30', horaLlegada: '08:42', motivo: 'Dificultad para respirar' },
+  { id: '3', ticket: 'T-0003', nombre: 'Pedro Martínez', dni: '56789012', fechaNac: '1982-06-14', horaLlegada: '09:10', motivo: 'Cefalea intensa' },
 ];
 
 const now = new Date();
 const MOCK_CLASIFICADOS: PacienteClasificado[] = [
-  { id: '4', ticket: 'T-004', nombre: 'Lucía Torres Salas', prioridad: 'II-NARANJA',   destino: 'Emergencias',             horaClasificado: new Date(now.getTime() - 8  * 60000), estado: 'Esperando' },
-  { id: '5', ticket: 'T-005', nombre: 'Roberto Saenz',      prioridad: 'III-AMARILLO', destino: 'Consultorio prioritario', horaClasificado: new Date(now.getTime() - 35 * 60000), estado: 'Esperando' },
-  { id: '6', ticket: 'T-006', nombre: 'Carmen Villanueva',  prioridad: 'IV-VERDE',     destino: 'Consultorio normal',      horaClasificado: new Date(now.getTime() - 90 * 60000), estado: 'Esperando' },
+  { id: '4', ticket: 'T-004', nombre: 'Lucía Torres Salas', prioridad: 'II-NARANJA', destino: 'Emergencias', horaClasificado: new Date(now.getTime() - 8 * 60000), estado: 'Esperando' },
+  { id: '5', ticket: 'T-005', nombre: 'Roberto Saenz', prioridad: 'III-AMARILLO', destino: 'Consultorio prioritario', horaClasificado: new Date(now.getTime() - 35 * 60000), estado: 'Esperando' },
+  { id: '6', ticket: 'T-006', nombre: 'Carmen Villanueva', prioridad: 'IV-VERDE', destino: 'Consultorio normal', horaClasificado: new Date(now.getTime() - 90 * 60000), estado: 'Esperando' },
 ];
 
 export default function TriajeDashboard() {
-  const [cola]         = useState<PacienteEspera[]>(MOCK_COLA);
+  const [cola] = useState<PacienteEspera[]>(MOCK_COLA);
   const [clasificados] = useState<PacienteClasificado[]>(MOCK_CLASIFICADOS);
 
-  const rojo    = clasificados.filter((p) => p.prioridad === 'I-ROJO').length;
+  const rojo = clasificados.filter((p) => p.prioridad === 'I-ROJO').length;
   const naranja = clasificados.filter((p) => p.prioridad === 'II-NARANJA').length;
 
   return (
