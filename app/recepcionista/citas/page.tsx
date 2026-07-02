@@ -22,11 +22,12 @@ const STATUS_STYLE: Record<string, string> = {
   Cancelada:  'bg-red-50 text-red-500 border-red-100',
 };
 
-type Apt = typeof APPOINTMENTS[0];
+type AptStatus = 'Confirmada' | 'Pendiente' | 'Cancelada';
+type Apt = Omit<typeof APPOINTMENTS[0], 'status'> & { status: AptStatus };
 type Modal = 'new' | 'cancel' | null;
 
 export default function CitasPage() {
-  const [appointments, setAppointments] = useState(APPOINTMENTS);
+  const [appointments, setAppointments] = useState<Apt[]>(APPOINTMENTS);
   const [modal, setModal] = useState<Modal>(null);
   const [selected, setSelected] = useState<Apt | null>(null);
   const [filter, setFilter] = useState<'Todas' | 'Confirmada' | 'Pendiente'>('Todas');
