@@ -5,6 +5,7 @@ import ModalBase from './ModalBase';
 import ConsentModal from './ConsentModal';
 import { useToast } from '@/context/ToastContext';
 import { calcAge } from '@/lib/format';
+import { createPacienteApi } from '@/lib/recepcion';
 
 interface FormData {
   tipoDocumento: string;
@@ -17,11 +18,23 @@ interface FormData {
   telefono: string;
   email: string;
   direccion: string;
+  aseguradora: string;
+  alergias: string;
 }
 
 const INITIAL: FormData = {
-  tipoDocumento: 'DNI', dni: '', nombres: '', apellidoPaterno: '',
-  apellidoMaterno: '', fechaNacimiento: '', sexo: '', telefono: '', email: '', direccion: '',
+  tipoDocumento: 'DNI',
+  dni: '',
+  nombres: '',
+  apellidoPaterno: '',
+  apellidoMaterno: '',
+  fechaNacimiento: '',
+  sexo: '',
+  telefono: '',
+  email: '',
+  direccion: '',
+  aseguradora: 'SIS',
+  alergias: '',
 };
 
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
@@ -37,12 +50,16 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-interface Props { onClose: () => void }
+interface Props {
+  onClose: () => void;
+  onSuccess?: () => void;
+}
 
-export default function NewPatientModal({ onClose }: Props) {
+export default function NewPatientModal({ onClose, onSuccess }: Props) {
   const [form, setForm] = useState<FormData>(INITIAL);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [showConsent, setShowConsent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const { success, error: toastError } = useToast();
 
   const set = (key: keyof FormData) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -62,14 +79,38 @@ export default function NewPatientModal({ onClose }: Props) {
       e.fechaNacimiento = 'La fecha no puede ser futura.';
     if (!form.sexo)                   e.sexo = 'Seleccione una opción.';
     if (!/^\d{9}$/.test(form.telefono)) e.telefono = 'El teléfono debe tener 9 dígitos.';
+    if (!form.aseguradora)            e.aseguradora = 'Campo obligatorio.';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) { toastError('Corrija los errores antes de guardar.'); return; }
-    success(`Paciente "${fullName}" registrado correctamente.`);
-    onClose();
+    setSubmitting(true);
+    try {
+      const payload = {
+        tipoDocumento: form.tipoDocumento,
+        nroDocumento: form.dni,
+        nombres: form.nombres,
+        apellidoPaterno: form.apellidoPaterno,
+        apellidoMaterno: form.apellidoMaterno,
+        fechaNacimiento: form.fechaNacimiento,
+        sexo: form.sexo,
+        telefono: form.telefono,
+        email: form.email || undefined,
+        direccion: form.direccion || undefined,
+        aseguradora: form.aseguradora,
+        alergias: form.alergias || undefined,
+      };
+      await createPacienteApi(payload);
+      success(`Paciente "${fullName}" registrado correctamente.`);
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (err: any) {
+      toastError(err.message || 'Error al guardar el paciente.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleSaveAndConsent() {
@@ -82,7 +123,34 @@ export default function NewPatientModal({ onClose }: Props) {
       <ConsentModal
         patientName={fullName}
         onClose={() => setShowConsent(false)}
-        onAccepted={() => { onClose(); }}
+        onAccepted={async () => {
+          // Trigger saving patient first, then proceed
+          setSubmitting(true);
+          try {
+            const payload = {
+              tipoDocumento: form.tipoDocumento,
+              nroDocumento: form.dni,
+              nombres: form.nombres,
+              apellidoPaterno: form.apellidoPaterno,
+              apellidoMaterno: form.apellidoMaterno,
+              fechaNacimiento: form.fechaNacimiento,
+              sexo: form.sexo,
+              telefono: form.telefono,
+              email: form.email || undefined,
+              direccion: form.direccion || undefined,
+              aseguradora: form.aseguradora,
+              alergias: form.alergias || undefined,
+            };
+            await createPacienteApi(payload);
+            success(`Paciente "${fullName}" y consentimiento registrados.`);
+            if (onSuccess) onSuccess();
+            onClose();
+          } catch (err: any) {
+            toastError(err.message || 'Error al guardar el paciente con consentimiento.');
+          } finally {
+            setSubmitting(false);
+          }
+        }}
       />
     );
   }
@@ -192,19 +260,40 @@ export default function NewPatientModal({ onClose }: Props) {
           </div>
         </div>
 
+        {/* Seguro y Alergias */}
+        <div>
+          <h3 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">
+            Seguro y Alergias
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Aseguradora" required>
+              <select value={form.aseguradora} onChange={set('aseguradora')} className={inputCls}>
+                <option value="SIS">SIS</option>
+                <option value="EsSalud">EsSalud</option>
+                <option value="EPS">EPS</option>
+                <option value="Particular">Particular</option>
+              </select>
+            </Field>
+            <Field label="Alergias">
+              <input value={form.alergias} onChange={set('alergias')}
+                placeholder="Ej: Penicilina, AINES" className={inputCls} />
+            </Field>
+          </div>
+        </div>
+
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button onClick={onClose} disabled={submitting}
+            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={handleSave}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-            Guardar
+          <button onClick={handleSave} disabled={submitting}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50">
+            {submitting ? 'Guardando…' : 'Guardar'}
           </button>
-          <button onClick={handleSaveAndConsent}
-            className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-            Guardar y Solicitar Consentimiento
+          <button onClick={handleSaveAndConsent} disabled={submitting}
+            className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+            {submitting ? 'Guardando…' : 'Guardar y Solicitar Consentimiento'}
           </button>
         </div>
       </div>

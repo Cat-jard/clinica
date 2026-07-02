@@ -1,14 +1,40 @@
 'use client';
 
-import { useState } from 'react';
-import { CalendarDays, Clock, Plus, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CalendarDays, Clock, Plus, AlertTriangle, Loader2 } from 'lucide-react';
 import PortalShell from '@/components/portal/PortalShell';
 import AgendarCitaModal from '@/components/portal/AgendarCitaModal';
 import type { CitaPaciente } from '@/lib/paciente-portal';
-import { MOCK_CITAS_PACIENTE, ESTADO_CITA_CONFIG } from '@/lib/paciente-portal';
+import { getCitasPacienteApi, ESTADO_CITA_CONFIG } from '@/lib/paciente-portal';
 
 export default function CitasPaciente() {
-  const [citas, setCitas]   = useState<CitaPaciente[]>(MOCK_CITAS_PACIENTE);
+  const [citas, setCitas]   = useState<CitaPaciente[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) return;
+        const user = await res.json();
+        if (user?.dni) {
+          const pRes = await fetch(`/api/pacientes/all?q=${encodeURIComponent(user.dni)}&size=1`);
+          const pBody = await pRes.json().catch(() => ({}));
+          const pages = pBody.data?.content || pBody.data || [];
+          const paciente = Array.isArray(pages) ? pages[0] : null;
+          if (paciente?.id) {
+            const citasData = await getCitasPacienteApi(paciente.id);
+            setCitas(citasData);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading citas:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
   const [tab, setTab]       = useState<'futuras' | 'pasadas'>('futuras');
   const [showAgendar, setShowAgendar] = useState(false);
   const [toast, setToast]   = useState('');
@@ -76,9 +102,16 @@ export default function CitasPaciente() {
         </div>
       )}
 
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-gray-400" />
+        </div>
+      )}
+
       {/* Lista de citas */}
-      <div className="space-y-3">
-        {visibles.map(c => (
+      {!loading && (
+        <div className="space-y-3">
+          {visibles.map(c => (
           <div key={c.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-start justify-between mb-2">
               <div>
@@ -109,12 +142,13 @@ export default function CitasPaciente() {
             )}
           </div>
         ))}
-        {visibles.length === 0 && (
-          <div className="text-center py-10 text-gray-400 text-sm">
-            No tienes citas {tab === 'futuras' ? 'próximas' : 'pasadas'}
-          </div>
-        )}
-      </div>
+          {visibles.length === 0 && (
+            <div className="text-center py-10 text-gray-400 text-sm">
+              No tienes citas {tab === 'futuras' ? 'próximas' : 'pasadas'}
+            </div>
+          )}
+        </div>
+      )}
 
       {showAgendar && <AgendarCitaModal onClose={() => setShowAgendar(false)} onAgendar={handleAgendar} />}
     </PortalShell>

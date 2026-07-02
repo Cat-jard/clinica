@@ -1,23 +1,44 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users } from 'lucide-react';
 import KpiCards from '@/components/medico/KpiCards';
 import ColaCitas from '@/components/medico/ColaCitas';
 import ColaEspera from '@/components/medico/ColaEspera';
-import { MOCK_CITAS, MOCK_COLA_ESPERA } from '@/lib/medico';
+import { listCitasMedicoApi, listColaEsperaMedicoApi, type CitaDia, type PacienteMedicoEspera } from '@/lib/medico';
 import { PRIORIDAD_CONFIG as PC } from '@/lib/vitals';
 
-// Re-export para el import limpio
 const PRIORIDAD_ORDER: Record<string, number> = {
   'I-ROJO': 1, 'II-NARANJA': 2, 'III-AMARILLO': 3, 'IV-VERDE': 4, 'V-AZUL': 5,
 };
 
 export default function MedicoDashboard() {
   const router = useRouter();
+  const [citas, setCitas] = useState<CitaDia[]>([]);
+  const [colaEspera, setColaEspera] = useState<PacienteMedicoEspera[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const atendidos  = MOCK_CITAS.filter(c => c.estado === 'Atendida').length;
-  const siguiente  = [...MOCK_COLA_ESPERA].sort(
+  useEffect(() => {
+    async function load() {
+      try {
+        const [citasData, colaData] = await Promise.all([
+          listCitasMedicoApi(),
+          listColaEsperaMedicoApi(),
+        ]);
+        setCitas(citasData);
+        setColaEspera(colaData);
+      } catch (err) {
+        console.error('Error loading medico data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const atendidos  = citas.filter(c => c.estado === 'Atendida').length;
+  const siguiente  = [...colaEspera].sort(
     (a, b) => PRIORIDAD_ORDER[a.prioridad] - PRIORIDAD_ORDER[b.prioridad]
   )[0];
 
@@ -32,16 +53,16 @@ export default function MedicoDashboard() {
 
       {/* KPIs */}
       <KpiCards
-        citasHoy={MOCK_CITAS.length}
-        enEspera={MOCK_COLA_ESPERA.length}
+        citasHoy={citas.length}
+        enEspera={colaEspera.length}
         resultadosPendientes={2}
         atendidosHoy={atendidos}
       />
 
       {/* Tablas */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <ColaCitas citas={MOCK_CITAS} />
-        <ColaEspera pacientes={MOCK_COLA_ESPERA} />
+        <ColaCitas citas={citas} />
+        <ColaEspera pacientes={colaEspera} />
       </div>
 
       {/* Botón flotante — Atender Siguiente */}

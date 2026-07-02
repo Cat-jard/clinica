@@ -1,38 +1,62 @@
 'use client';
 
-import { useState } from 'react';
-import { Users, Plus, Pencil, Ban, CheckCircle, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Plus, Pencil, Ban, CheckCircle, Search, Loader2 } from 'lucide-react';
 import UsuarioModal from '@/components/admin/UsuarioModal';
 import type { Usuario } from '@/lib/admin';
-import { MOCK_USUARIOS, ROL_CONFIG, ROLES } from '@/lib/admin';
+import {
+  listUsuariosApi, crearUsuarioApi, actualizarUsuarioApi, toggleEstadoUsuarioApi,
+  ROL_CONFIG, ROLES,
+} from '@/lib/admin';
 
 export default function UsuariosPage() {
-  const [usuarios, setUsuarios] = useState<Usuario[]>(MOCK_USUARIOS);
-  const [modalUser, setModalUser] = useState<Usuario | null | undefined>(undefined); // undefined=cerrado, null=nuevo
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalUser, setModalUser] = useState<Usuario | null | undefined>(undefined);
   const [filtroRol, setFiltroRol] = useState('Todos');
   const [busca, setBusca]         = useState('');
   const [toast, setToast]         = useState('');
+
+  useEffect(() => {
+    listUsuariosApi().then(setUsuarios).catch(() => {}).finally(() => setLoading(false));
+  }, []);
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(''), 3500);
   }
 
-  function handleGuardar(u: Usuario) {
-    setUsuarios(prev => {
-      const existe = prev.some(x => x.id === u.id);
-      return existe ? prev.map(x => x.id === u.id ? u : x) : [u, ...prev];
-    });
-    setModalUser(undefined);
-    showToast('✓ Usuario guardado correctamente');
+  async function handleGuardar(u: Usuario) {
+    try {
+      if (u.id) {
+        await actualizarUsuarioApi(u.id, {
+          dni: u.dni, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
+          telefono: u.telefono, rol: u.rol, especialidad: u.especialidad,
+        });
+      } else {
+        await crearUsuarioApi({
+          dni: u.dni, nombre: u.nombre, apellidos: u.apellidos, email: u.email,
+          telefono: u.telefono, rol: u.rol, especialidad: u.especialidad,
+        });
+      }
+      const list = await listUsuariosApi();
+      setUsuarios(list);
+      setModalUser(undefined);
+      showToast('✓ Usuario guardado correctamente');
+    } catch (err: any) {
+      showToast('✗ ' + (err.message || 'Error al guardar usuario'));
+    }
   }
 
-  // Regla de oro #3: NO eliminar, solo desactivar
-  function toggleEstado(id: string) {
-    setUsuarios(prev => prev.map(u =>
-      u.id === id ? { ...u, estado: u.estado === 'Activo' ? 'Inactivo' : 'Activo' } : u
-    ));
-    showToast('✓ Estado del usuario actualizado');
+  async function toggleEstado(id: string) {
+    try {
+      await toggleEstadoUsuarioApi(id);
+      const list = await listUsuariosApi();
+      setUsuarios(list);
+      showToast('✓ Estado del usuario actualizado');
+    } catch (err: any) {
+      showToast('✗ ' + (err.message || 'Error al cambiar estado'));
+    }
   }
 
   const filtered = usuarios.filter(u => {
@@ -88,6 +112,12 @@ export default function UsuariosPage() {
           {ROLES.map(r => <option key={r}>{r}</option>)}
         </select>
       </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-gray-400" />
+        </div>
+      )}
 
       {/* Tabla */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

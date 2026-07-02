@@ -1,21 +1,51 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 import {
   CalendarDays, FlaskConical, Pill, MessageSquare, Clock, Plus, ChevronRight,
 } from 'lucide-react';
 import PortalShell from '@/components/portal/PortalShell';
 import {
-  MOCK_PERFIL, MOCK_CITAS_PACIENTE, MOCK_RESULTADOS_PACIENTE,
-  MOCK_RECETAS_PACIENTE, MOCK_MENSAJES_PACIENTE, MOCK_ACTIVIDAD_PACIENTE,
+  getPerfilPacienteApi, getCitasPacienteApi,
+  type PerfilPaciente, type CitaPaciente,
 } from '@/lib/paciente-portal';
+import { getUsuario } from '@/lib/auth';
 
 export default function DashboardPaciente() {
-  const proxima = MOCK_CITAS_PACIENTE.find(c => c.esFutura && (c.estado === 'Confirmada' || c.estado === 'Programada'));
-  const resultadosNuevos = MOCK_RESULTADOS_PACIENTE.filter(r => r.estado === 'Validado').length;
-  const recetasActivas   = MOCK_RECETAS_PACIENTE.filter(r => r.estado === 'Vigente').length;
-  const mensajesNoLeidos = MOCK_MENSAJES_PACIENTE.filter(m => !m.leido).length;
+  const [perfil, setPerfil] = useState<PerfilPaciente | null>(null);
+  const [citas, setCitas] = useState<CitaPaciente[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    async function load() {
+      try {
+        const p = await getPerfilPacienteApi();
+        setPerfil(p);
+        if (p?.dni) {
+          const user = getUsuario();
+          if (user) {
+            const res = await fetch(`/api/pacientes/all?q=${encodeURIComponent(p.dni)}&size=1`);
+            const body = await res.json().catch(() => ({}));
+            const pages = body.data?.content || body.data || [];
+            const paciente = Array.isArray(pages) ? pages[0] : null;
+            if (paciente?.id) {
+              const citasData = await getCitasPacienteApi(paciente.id);
+              setCitas(citasData);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error loading dashboard:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const proxima = citas.find(c => c.esFutura && (c.estado === 'Confirmada' || c.estado === 'Programada'));
   const hoy = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const accesos = [
@@ -27,9 +57,15 @@ export default function DashboardPaciente() {
 
   return (
     <PortalShell>
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-gray-400" />
+        </div>
+      )}
+
       {/* Saludo */}
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-gray-900">¡Hola, {MOCK_PERFIL.nombre}! 👋</h1>
+        <h1 className="text-xl font-bold text-gray-900">¡Hola, {perfil?.nombre || 'Paciente'}! 👋</h1>
         <p className="text-xs text-gray-500 capitalize">{hoy}</p>
       </div>
 
@@ -59,9 +95,9 @@ export default function DashboardPaciente() {
 
       {/* Tarjetas de resumen */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <ResumenCard Icon={FlaskConical} label="Resultados" value={resultadosNuevos} color="text-purple-600" bg="bg-purple-50" href="/portal/resultados" />
-        <ResumenCard Icon={Pill}         label="Recetas"    value={recetasActivas}   color="text-teal-600"   bg="bg-teal-50"   href="/portal/recetas" />
-        <ResumenCard Icon={MessageSquare}label="Mensajes"   value={mensajesNoLeidos} color="text-amber-600"  bg="bg-amber-50"  href="/portal/mensajes" />
+        <ResumenCard Icon={FlaskConical} label="Resultados" value={0} color="text-purple-600" bg="bg-purple-50" href="/portal/resultados" />
+        <ResumenCard Icon={Pill}         label="Recetas"    value={0} color="text-teal-600"   bg="bg-teal-50"   href="/portal/recetas" />
+        <ResumenCard Icon={MessageSquare}label="Mensajes"   value={0} color="text-amber-600"  bg="bg-amber-50"  href="/portal/mensajes" />
       </div>
 
       {/* Accesos rápidos */}
@@ -78,15 +114,18 @@ export default function DashboardPaciente() {
         ))}
       </div>
 
-      {/* Actividad reciente */}
-      <p className="text-sm font-semibold text-gray-800 mb-3">Actividad reciente</p>
+      {/* Actividad reciente - próximas citas */}
+      <p className="text-sm font-semibold text-gray-800 mb-3">Próximas citas</p>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
-        {MOCK_ACTIVIDAD_PACIENTE.map(a => (
-          <div key={a.id} className="flex items-center gap-3 px-4 py-3">
+        {citas.filter(c => c.esFutura).length === 0 && (
+          <div className="px-4 py-6 text-center text-xs text-gray-400">No tienes próximas citas programadas.</div>
+        )}
+        {citas.filter(c => c.esFutura).map(c => (
+          <div key={c.id} className="flex items-center gap-3 px-4 py-3">
             <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-700">{a.evento}</p>
-              <p className="text-[10px] text-gray-400">{a.fecha}</p>
+              <p className="text-xs text-gray-700">{c.medico} — {c.motivo}</p>
+              <p className="text-[10px] text-gray-400">{c.fecha} a las {c.hora}</p>
             </div>
             <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
           </div>

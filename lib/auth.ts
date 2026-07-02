@@ -1,9 +1,14 @@
 // ============================================================
-// Integración con el microservicio usuario-service (login / JWT)
+// Integración con el backend a través del API Gateway
 // ============================================================
 
-// En desarrollo apunta directo al usuario-service (8081).
-// Cuando exista el API Gateway, cambiar a http://localhost:8080
+// El gateway (puerto 8080) enruta cada ruta a su microservicio:
+//   /api/auth/**         → usuario-service
+//   /api/pacientes/**    → recepcion-service
+//   /api/citas/**        → citas-service
+//   /api/triaje/**       → triaje-service
+//   /api/hospitalizacion/** → hospitalizacion-service
+//   /api/usuarios/**     → usuario-service
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8081';
 

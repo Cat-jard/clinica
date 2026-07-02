@@ -246,6 +246,96 @@ export const EXAMENES_CATALOG = [
   { tipo: 'Imágenes' as const,    nombre: 'Electrocardiograma',       muestra: '' },
 ];
 
+// ── API functions ────────────────────────────────────────────────────────────
+import { authFetch, getUsuario } from './auth';
+import type { Cita } from './citas';
+
+/** Fetch today's appointments for the logged-in doctor. */
+export async function listCitasMedicoApi(): Promise<CitaDia[]> {
+  try {
+    const user = getUsuario();
+    if (!user) return [];
+    const res = await authFetch(`/api/citas/medico/${user.id}?size=50`);
+    if (!res.ok) return [];
+    const body = await res.json();
+    const content = body.data?.content || body.data || [];
+    return content.map((c: Cita) => ({
+      id: c.id,
+      hora: c.horaInicio?.slice(0, 5) || '',
+      pacienteNombre: c.pacienteNombre || '',
+      pacienteDni: '',
+      motivoResumen: c.motivo,
+      estado: (c.estado === 'PROGRAMADA' ? 'Pendiente' : c.estado === 'CONFIRMADA' ? 'Confirmada' : c.estado === 'ATENDIDA' ? 'Atendida' : 'Pendiente') as CitaDia['estado'],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch waiting queue for the doctor (triage classified patients). */
+export async function listColaEsperaMedicoApi(): Promise<PacienteMedicoEspera[]> {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const { getColaTriajeApi, listRegistrosTriajeApi } = await import('./triaje');
+    const registros = await listRegistrosTriajeApi(today);
+    return registros.map((r) => ({
+      id: r.pacienteId,
+      ticket: r.ticket,
+      nombre: r.pacienteNombre,
+      dni: r.pacienteDni,
+      edad: 0,
+      sexo: 'M' as const,
+      prioridad: r.prioridad,
+      signos: { pasSistolica: r.signos?.pasSistolica, pasDiastolica: r.signos?.pasDiastolica, frecCardiaca: r.signos?.frecCardiaca, spo2: r.signos?.spo2, temperatura: r.signos?.temperatura },
+      tiempoEspera: new Date(r.timestamp || Date.now()),
+      motivoConsulta: r.motivoConsulta,
+      aseguradora: 'SIS' as const,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch patient details from recepcion-service. */
+export async function getPacienteMedicoApi(pacienteId: string): Promise<PacienteMedico | null> {
+  try {
+    const res = await authFetch(`/api/pacientes/${pacienteId}`);
+    if (!res.ok) return null;
+    const body = await res.json();
+    const p = body.data;
+    if (!p) return null;
+    return {
+      id: p.id,
+      nombre: p.nombres,
+      apellidos: `${p.apellidoPaterno} ${p.apellidoMaterno}`,
+      dni: p.nroDocumento,
+      fechaNac: p.fechaNacimiento,
+      sexo: p.sexo === 'Masculino' ? 'M' : 'F',
+      nroHistoria: p.nroHistoria || '',
+      aseguradora: p.aseguradora || 'Particular',
+      alergias: p.alergias || '',
+      signos: {},
+      prioridad: 'IV-VERDE',
+      motivoConsulta: '',
+      atencionActual: {
+        id: '',
+        pacienteId: p.id,
+        fechaInicio: new Date().toISOString(),
+        anamnesis: { ...anamnesisVacia },
+        examenFisico: examenVacio,
+        diagnosticos: [],
+        indicacionesGenerales: '',
+        procedimientosRealizados: '',
+        interconsultas: [],
+        estado: 'Borrador',
+      },
+      atencionesPrevias: [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── Datos mock ───────────────────────────────────────────────────────────────
 export const MOCK_CITAS: CitaDia[] = [
   { id: 'c1', hora: '08:00', pacienteNombre: 'Carlos Rodríguez Pérez',  pacienteDni: '45231890', motivoResumen: 'Control diabetes',           estado: 'Atendida'    },
