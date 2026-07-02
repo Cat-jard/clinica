@@ -9,7 +9,7 @@ import { TIPOS_MUESTRA, ORIGENES_MUESTRA, TUBOS, CONDICIONES, ANALIZADORES } fro
 interface RegistroMuestraModalProps {
   orden: OrdenLab;
   onClose: () => void;
-  onRegistrar: (ordenId: string) => void;
+  onRegistrar: (ordenId: string, data: { origenMuestra: string; condicion: string; observaciones: string }) => void;
 }
 
 export default function RegistroMuestraModal({ orden, onClose, onRegistrar }: RegistroMuestraModalProps) {
@@ -26,7 +26,7 @@ export default function RegistroMuestraModal({ orden, onClose, onRegistrar }: Re
 
   function handleRegistrar() {
     if (!canSave) return;
-    onRegistrar(orden.id);
+    onRegistrar(orden.id, { origenMuestra: origen, condicion, observaciones: obs });
     setSaved(true);
     setTimeout(onClose, 1200);
   }

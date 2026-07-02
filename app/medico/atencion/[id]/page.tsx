@@ -70,6 +70,7 @@ export default function AtencionPage({ params }: { params: Promise<{ id: string 
         onDiagnosticosChange={setDiagnosticos}
         onIndicacionesChange={setIndicaciones}
         onProcedimientosChange={setProcedimientos}
+        onToast={showToast}
       />
 
       {/* Botón Dar de Alta (hospitalización) */}

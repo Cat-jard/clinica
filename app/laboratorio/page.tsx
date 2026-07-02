@@ -1,40 +1,74 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import KpiCards from '@/components/laboratorio/KpiCards';
 import OrdenesPendientesTable from '@/components/laboratorio/OrdenesPendientesTable';
 import ResultadosCriticosTable from '@/components/laboratorio/ResultadosCriticosTable';
 import RegistroMuestraModal from '@/components/laboratorio/RegistroMuestraModal';
 import IngresoResultadosModal from '@/components/laboratorio/IngresoResultadosModal';
-import type { OrdenLab, ResultadoCritico } from '@/lib/laboratorio';
-import { MOCK_ORDENES_LAB, MOCK_RESULTADOS_CRITICOS, MOCK_CONTROLES } from '@/lib/laboratorio';
+import type { OrdenLab, ResultadoCritico, ValorResultado } from '@/lib/laboratorio';
+import { MOCK_CONTROLES } from '@/lib/laboratorio';
+import {
+  listarOrdenesLab,
+  registrarMuestraLab,
+  ingresarResultadosLab,
+  validarOrdenLab,
+} from '@/lib/api/laboratorio';
 
 export default function LaboratorioDashboard() {
-  const [ordenes,   setOrdenes]   = useState<OrdenLab[]>(MOCK_ORDENES_LAB);
-  const [criticos,  setCriticos]  = useState<ResultadoCritico[]>(MOCK_RESULTADOS_CRITICOS);
+  const [ordenes,   setOrdenes]   = useState<OrdenLab[]>([]);
+  const [criticos,  setCriticos]  = useState<ResultadoCritico[]>([]);
   const [ordenMuestra,    setOrdenMuestra]    = useState<OrdenLab | null>(null);
   const [ordenResultados, setOrdenResultados] = useState<OrdenLab | null>(null);
   const [toast, setToast] = useState('');
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(''), 3500);
   }
 
-  function handleRegistrarMuestra(ordenId: string) {
-    setOrdenes(prev => prev.map(o =>
-      o.id === ordenId ? { ...o, estado: 'Muestra Registrada' } : o
-    ));
-    setOrdenMuestra(null);
-    showToast('✓ Muestra registrada correctamente');
+  const cargarOrdenes = useCallback(async () => {
+    try {
+      setError('');
+      const data = await listarOrdenesLab();
+      setOrdenes(data);
+    } catch {
+      setError('No se pudo conectar con el servicio de laboratorio');
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarOrdenes();
+  }, [cargarOrdenes]);
+
+  async function handleRegistrarMuestra(
+    ordenId: string,
+    data: { origenMuestra: string; condicion: string; observaciones: string },
+  ) {
+    try {
+      await registrarMuestraLab(ordenId, data);
+      await cargarOrdenes();
+      setOrdenMuestra(null);
+      showToast('✓ Muestra registrada correctamente');
+    } catch {
+      showToast('✗ Error al registrar la muestra');
+    }
   }
 
-  function handleValidarResultados(ordenId: string) {
-    setOrdenes(prev => prev.map(o =>
-      o.id === ordenId ? { ...o, estado: 'Validado' } : o
-    ));
-    setOrdenResultados(null);
-    showToast('✓ Resultados validados y enviados a la Historia Clínica');
+  async function handleValidarResultados(ordenId: string, resultados: ValorResultado[]) {
+    try {
+      await ingresarResultadosLab(ordenId, resultados);
+      await validarOrdenLab(ordenId);
+      await cargarOrdenes();
+      setOrdenResultados(null);
+      showToast('✓ Resultados validados y enviados a la Historia Clínica');
+    } catch {
+      showToast('✗ Error al validar los resultados');
+    }
   }
 
   function handleNotificarMedico(criticoId: string) {
@@ -60,18 +94,30 @@ export default function LaboratorioDashboard() {
         <p className="text-xs text-gray-500 mt-0.5">María Torres — Tecnóloga Médica · Lab. de Patología Clínica</p>
       </div>
 
-      {/* KPIs */}
-      <KpiCards ordenes={ordenes} criticos={criticos} controles={MOCK_CONTROLES} />
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+          {error} — verifique que el api-gateway (8080) y laboratorio-service (8084) estén activos.
+        </div>
+      )}
 
-      {/* Alertas de resultados críticos */}
-      <ResultadosCriticosTable criticos={criticos} onNotificar={handleNotificarMedico} />
+      {cargando ? (
+        <p className="text-sm text-gray-400 text-center py-12">Cargando cola de órdenes…</p>
+      ) : (
+        <>
+          {/* KPIs */}
+          <KpiCards ordenes={ordenes} criticos={criticos} controles={MOCK_CONTROLES} />
 
-      {/* Cola de órdenes */}
-      <OrdenesPendientesTable
-        ordenes={ordenes}
-        onRegistrarMuestra={setOrdenMuestra}
-        onIngresarResultados={setOrdenResultados}
-      />
+          {/* Alertas de resultados críticos */}
+          <ResultadosCriticosTable criticos={criticos} onNotificar={handleNotificarMedico} />
+
+          {/* Cola de órdenes */}
+          <OrdenesPendientesTable
+            ordenes={ordenes}
+            onRegistrarMuestra={setOrdenMuestra}
+            onIngresarResultados={setOrdenResultados}
+          />
+        </>
+      )}
 
       {/* Modales */}
       {ordenMuestra && (

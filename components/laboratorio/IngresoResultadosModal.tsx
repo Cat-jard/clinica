@@ -10,7 +10,7 @@ import { checkResultado, getUnidad, getValorRef } from '@/lib/laboratorio';
 interface IngresoResultadosModalProps {
   orden: OrdenLab;
   onClose: () => void;
-  onValidar: (ordenId: string) => void;
+  onValidar: (ordenId: string, resultados: ValorResultado[]) => void;
 }
 
 export default function IngresoResultadosModal({ orden, onClose, onValidar }: IngresoResultadosModalProps) {
@@ -55,7 +55,7 @@ export default function IngresoResultadosModal({ orden, onClose, onValidar }: In
 
   function handleFirmaConfirm() {
     setValidado(true);
-    onValidar(orden.id);
+    onValidar(orden.id, resultados);
     setTimeout(onClose, 1400);
   }
 

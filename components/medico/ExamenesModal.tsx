@@ -4,12 +4,16 @@ import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import ModalBase from '@/components/modals/ModalBase';
 import FirmaDigitalModal from './FirmaDigitalModal';
-import type { ItemExamen } from '@/lib/medico';
+import type { ItemExamen, PacienteMedico } from '@/lib/medico';
 import { EXAMENES_CATALOG } from '@/lib/medico';
+import { enviarSolicitudExamenes } from '@/lib/api/examenes';
+import { ApiError } from '@/lib/api/client';
 
 interface ExamenesModalProps {
   onClose: () => void;
-  pacienteNombre: string;
+  paciente: PacienteMedico;
+  onEnviado?: (mensaje: string) => void;
+  onError?: (mensaje: string) => void;
 }
 
 const emptyItem = (): ItemExamen => ({
@@ -17,10 +21,13 @@ const emptyItem = (): ItemExamen => ({
   origenMuestra: '', ayuno: 'No', urgente: false, indicaciones: '',
 });
 
-export default function ExamenesModal({ onClose, pacienteNombre }: ExamenesModalProps) {
+export default function ExamenesModal({ onClose, paciente, onEnviado, onError }: ExamenesModalProps) {
   const [items, setItems]         = useState<ItemExamen[]>([emptyItem()]);
   const [showFirma, setShowFirma] = useState(false);
   const [firmada, setFirmada]     = useState(false);
+  const [enviando, setEnviando]   = useState(false);
+
+  const pacienteNombre = `${paciente.nombre} ${paciente.apellidos}`;
 
   function updateItem(id: string, key: keyof ItemExamen, val: string | boolean) {
     setItems(prev => prev.map(it => it.id === id ? { ...it, [key]: val } : it));
@@ -33,7 +40,30 @@ export default function ExamenesModal({ onClose, pacienteNombre }: ExamenesModal
     ));
   }
 
-  const canFirmar = items.length > 0 && items.every(it => it.nombre);
+  const itemsValidos = items.filter(it => it.nombre && it.tipo !== 'Otros');
+  const canFirmar = itemsValidos.length > 0 && items.every(it => it.nombre);
+
+  async function handleConfirmarFirma() {
+    setEnviando(true);
+    try {
+      const res = await enviarSolicitudExamenes(paciente, items);
+      const labCount = res.ordenesLaboratorio?.length ?? 0;
+      const imgCount = res.estudiosRadiologia?.length ?? 0;
+      const detalle = [
+        labCount > 0 ? `${labCount} orden(es) de laboratorio` : null,
+        imgCount > 0 ? `${imgCount} estudio(s) de imágenes` : null,
+      ].filter(Boolean).join(' · ');
+      setFirmada(true);
+      setShowFirma(false);
+      onEnviado?.(detalle ? `${res.mensaje} — ${detalle}` : res.mensaje);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'No se pudo enviar la solicitud';
+      onError?.(msg);
+      setShowFirma(false);
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   return (
     <>
@@ -82,6 +112,12 @@ export default function ExamenesModal({ onClose, pacienteNombre }: ExamenesModal
                   </div>
                 </div>
 
+                {it.tipo === 'Otros' && (
+                  <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                    Los exámenes tipo &quot;Otros&quot; no se envían al laboratorio ni a imágenes por ahora.
+                  </p>
+                )}
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {it.tipo === 'Laboratorio' && (
                     <>
@@ -125,9 +161,9 @@ export default function ExamenesModal({ onClose, pacienteNombre }: ExamenesModal
           <div className="flex gap-3 pt-2 border-t border-gray-100">
             <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
             <button className="px-4 py-2.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">Guardar</button>
-            <button onClick={() => canFirmar && setShowFirma(true)} disabled={!canFirmar || firmada}
+            <button onClick={() => canFirmar && setShowFirma(true)} disabled={!canFirmar || firmada || enviando}
               className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              {firmada ? 'Orden Enviada ✓' : 'Firmar y Enviar'}
+              {firmada ? 'Orden Enviada ✓' : enviando ? 'Enviando…' : 'Firmar y Enviar'}
             </button>
           </div>
         </div>
@@ -136,9 +172,9 @@ export default function ExamenesModal({ onClose, pacienteNombre }: ExamenesModal
       {showFirma && (
         <FirmaDigitalModal
           titulo="Firmar Orden de Exámenes"
-          descripcion={`Se firmará la solicitud de ${items.length} examen(es) para ${pacienteNombre}.`}
-          onConfirm={() => { setFirmada(true); setShowFirma(false); }}
-          onClose={() => setShowFirma(false)}
+          descripcion={`Se firmará la solicitud de ${itemsValidos.length} examen(es) para ${pacienteNombre}.`}
+          onConfirm={handleConfirmarFirma}
+          onClose={() => !enviando && setShowFirma(false)}
         />
       )}
     </>

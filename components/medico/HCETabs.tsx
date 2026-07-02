@@ -24,6 +24,7 @@ interface HCETabsProps {
   onDiagnosticosChange: (d: DiagnosticoCIE10[]) => void;
   onIndicacionesChange: (v: string) => void;
   onProcedimientosChange: (v: string) => void;
+  onToast?: (msg: string) => void;
 }
 
 const TABS = [
@@ -39,6 +40,7 @@ type TabId = typeof TABS[number]['id'];
 export default function HCETabs({
   paciente, anamnesis, examenFisico, diagnosticos, indicaciones, procedimientos,
   onAnamnesisChange, onExamenChange, onDiagnosticosChange, onIndicacionesChange, onProcedimientosChange,
+  onToast,
 }: HCETabsProps) {
   const [tab, setTab]             = useState<TabId>('anamnesis');
   const [showReceta, setShowReceta]       = useState(false);
@@ -143,7 +145,9 @@ export default function HCETabs({
       {showExamenes && (
         <ExamenesModal
           onClose={() => setShowExamenes(false)}
-          pacienteNombre={`${paciente.nombre} ${paciente.apellidos}`}
+          paciente={paciente}
+          onEnviado={msg => { onToast?.(`✓ ${msg}`); setShowExamenes(false); }}
+          onError={msg => onToast?.(`✗ ${msg}`)}
         />
       )}
       {showInterconsulta && (

@@ -1,40 +1,83 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import VisorDICOM from '@/components/radiologo/VisorDICOM';
 import InformeRadiologico from '@/components/radiologo/InformeRadiologico';
 import type { EstudioImagen, InformeRadiologico as TInforme } from '@/lib/radiologia';
-import { MOCK_ESTUDIOS } from '@/lib/radiologia';
+import {
+  obtenerEstudioRad,
+  iniciarLecturaRad,
+  guardarBorradorRad,
+  firmarInformeRad,
+} from '@/lib/api/radiologia';
 
 export default function LecturaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const base = MOCK_ESTUDIOS.find(e => e.id === id);
-  if (!base) notFound();
-
-  const [estudio, setEstudio] = useState<EstudioImagen>(base);
+  const [estudio, setEstudio] = useState<EstudioImagen | null>(null);
   const [toast, setToast]     = useState('');
+  const [cargando, setCargando] = useState(true);
+  const [error, setError]     = useState('');
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(''), 3500);
   }
 
-  function handleGuardarBorrador(informe: TInforme) {
-    setEstudio(prev => ({ ...prev, informe, estado: 'Borrador' }));
-    showToast('✓ Borrador guardado correctamente');
+  const cargarEstudio = useCallback(async () => {
+    try {
+      setError('');
+      let data = await obtenerEstudioRad(id);
+      if (data.estado === 'Pendiente') {
+        data = await iniciarLecturaRad(id);
+      }
+      setEstudio(data);
+    } catch {
+      setError('Estudio no encontrado o servicio no disponible');
+      setEstudio(null);
+    } finally {
+      setCargando(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    cargarEstudio();
+  }, [cargarEstudio]);
+
+  if (cargando) {
+    return (
+      <div className="px-4 py-12 text-center text-sm text-gray-400">
+        Cargando estudio…
+      </div>
+    );
   }
 
-  function handleFirmar(informe: TInforme, urgente: boolean) {
-    const firmadoEn = new Date().toLocaleDateString('es-PE', {
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    }).replace(',', ' -');
-    setEstudio(prev => ({ ...prev, informe, estado: 'Firmado', firmadoEn, esCritico: urgente }));
-    showToast(urgente
-      ? '✓ Informe firmado y alerta URGENTE enviada al médico tratante'
-      : '✓ Informe firmado y enviado a la Historia Clínica');
+  if (error || !estudio) {
+    notFound();
+  }
+
+  async function handleGuardarBorrador(informe: TInforme) {
+    try {
+      const actualizado = await guardarBorradorRad(estudio!.id, informe);
+      setEstudio(actualizado);
+      showToast('✓ Borrador guardado correctamente');
+    } catch {
+      showToast('✗ Error al guardar el borrador');
+    }
+  }
+
+  async function handleFirmar(informe: TInforme, urgente: boolean) {
+    try {
+      const actualizado = await firmarInformeRad(estudio!.id, informe, urgente);
+      setEstudio(actualizado);
+      showToast(urgente
+        ? '✓ Informe firmado y alerta URGENTE enviada al médico tratante'
+        : '✓ Informe firmado y enviado a la Historia Clínica');
+    } catch {
+      showToast('✗ Error al firmar el informe');
+    }
   }
 
   return (
