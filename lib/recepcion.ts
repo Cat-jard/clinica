@@ -113,7 +113,7 @@ export async function createPacienteApi(data: any): Promise<Paciente> {
 /** Lists active doctors in the system via public endpoint. */
 export async function listMedicosApi(): Promise<Medico[]> {
   try {
-    const res = await authFetch('/api/public/medicos');
+    const res = await authFetch('/api/public/medicos/all');
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     return (data as any[]).map((u: any) => ({

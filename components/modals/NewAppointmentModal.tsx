@@ -111,7 +111,7 @@ export default function NewAppointmentModal({ onClose, onSuccess }: Props) {
       });
 
   const filteredDoctors = medicos.filter(
-    m => m.especialidad === form.especialidad && m.estado === 'ACTIVO'
+    m => m.especialidad === form.especialidad && m.estado?.toUpperCase() === 'ACTIVO'
   );
   
   const today = new Date().toISOString().split('T')[0];

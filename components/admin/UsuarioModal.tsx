@@ -42,7 +42,7 @@ export default function UsuarioModal({ usuario, onClose, onGuardar }: UsuarioMod
   function handleGuardar() {
     if (!canGuardar) return;
     onGuardar({
-      id: usuario?.id ?? `u-${Date.now()}`,
+      id: usuario?.id ?? '',
       dni, nombre, apellidos, email, telefono, rol,
       especialidad: rol === 'Médico' ? especialidad : undefined,
       estado,
