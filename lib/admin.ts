@@ -247,6 +247,84 @@ export const MOCK_AUDITORIA_ADMIN: EntradaAuditoriaAdmin[] = [
   { id: 'aa-08', fechaHora: '25/06/2026 - 08:05', usuario: 'Patricia Núñez',   rol: 'Admin',       accion: 'Creación de usuario',   ip: '192.168.1.10', detalle: 'Usuario creado: Elena Castro (Enfermería)' },
 ];
 
+// ===================== API FUNCTIONS =====================
+import { authFetch, errorMensaje } from './auth';
+
+/** Maps backend UsuarioResponse to frontend Usuario. */
+export function mapUsuario(u: any): Usuario {
+  return {
+    id: u.id?.toString(),
+    nombre: u.nombre,
+    apellidos: u.apellidos,
+    dni: u.dni,
+    email: u.email,
+    telefono: u.telefono,
+    rol: mapRolFromBackend(u.rol),
+    especialidad: u.especialidad,
+    estado: u.estado === 'Activo' ? 'Activo' as const : 'Inactivo' as const,
+    ultimoAcceso: u.ultimoAcceso || '—',
+  };
+}
+
+/** Lists all users from usuario-service. */
+export async function listUsuariosApi(rol?: string, q?: string): Promise<Usuario[]> {
+  const params = new URLSearchParams();
+  if (rol) params.set('rol', rol);
+  if (q) params.set('q', q);
+  const res = await authFetch(`/api/usuarios${params.toString() ? '?' + params.toString() : ''}`);
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron cargar usuarios'));
+  const data = await res.json();
+  return (data as any[]).map(mapUsuario);
+}
+
+/** Maps backend rol label to frontend RolUsuario type. */
+function mapRolFromBackend(rol: string): RolUsuario {
+  const map: Record<string, RolUsuario> = {
+    'Recepción': 'Recepción', 'RECEPCION': 'Recepción',
+    'Enfermería': 'Enfermería', 'ENFERMERIA': 'Enfermería',
+    'Médico': 'Médico', 'MEDICO': 'Médico',
+    'Radiólogo': 'Radiólogo', 'RADIOLOGO': 'Radiólogo',
+    'Laboratorio': 'Laboratorio', 'LABORATORIO': 'Laboratorio',
+    'Farmacia': 'Farmacia', 'FARMACIA': 'Farmacia',
+    'Admin': 'Admin', 'ADMIN': 'Admin', 'SOPORTE': 'Admin',
+  };
+  return map[rol] || 'Admin';
+}
+
+/** Creates a new user (usuario-service devuelve UsuarioResponse directo, no ApiResponse). */
+export async function crearUsuarioApi(data: {
+  dni: string; nombre: string; apellidos: string; email: string;
+  telefono: string; rol: string; especialidad?: string; password?: string;
+}): Promise<Usuario> {
+  const res = await authFetch('/api/usuarios', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo crear el usuario'));
+  const raw = await res.json();
+  return mapUsuario(raw);
+}
+
+/** Updates an existing user (usuario-service devuelve UsuarioResponse directo). */
+export async function actualizarUsuarioApi(id: string, data: {
+  dni: string; nombre: string; apellidos: string; email: string;
+  telefono: string; rol: string; especialidad?: string;
+}): Promise<Usuario> {
+  const res = await authFetch(`/api/usuarios/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo actualizar el usuario'));
+  const raw = await res.json();
+  return mapUsuario(raw);
+}
+
+/** Toggles user active/inactive state. */
+export async function toggleEstadoUsuarioApi(id: string): Promise<void> {
+  const res = await authFetch(`/api/usuarios/${id}/estado`, { method: 'PATCH' });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo cambiar el estado'));
+}
+
 // ===================== HELPERS =====================
 
 export function formatSoles(n: number): string {

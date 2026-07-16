@@ -1,18 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { notFound } from 'next/navigation';
 import { use } from 'react';
-import { BedDouble } from 'lucide-react';
+import { BedDouble, Loader2 } from 'lucide-react';
 import PacienteHeader from '@/components/medico/PacienteHeader';
 import HCETabs from '@/components/medico/HCETabs';
 import EpicrisModal from '@/components/medico/EpicrisModal';
-import type { Anamnesis, ExamenFisico, DiagnosticoCIE10 } from '@/lib/medico';
-import { MOCK_PACIENTES } from '@/lib/medico';
+import type { Anamnesis, ExamenFisico, DiagnosticoCIE10, PacienteMedico } from '@/lib/medico';
+import { getPacienteMedicoApi } from '@/lib/medico';
 
 export default function AtencionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const pacienteBase = MOCK_PACIENTES.find(p => p.id === id);
+  const [pacienteBase, setPacienteBase] = useState<PacienteMedico | null | undefined>(undefined);
+
+  useEffect(() => {
+    getPacienteMedicoApi(id).then(setPacienteBase).catch(() => setPacienteBase(null));
+  }, [id]);
+
+  if (pacienteBase === undefined) return <div className="p-8 flex items-center justify-center"><Loader2 size={24} className="animate-spin text-gray-400" /></div>;
   if (!pacienteBase) notFound();
 
   const [anamnesis, setAnamnesis]         = useState<Anamnesis>(pacienteBase.atencionActual.anamnesis);

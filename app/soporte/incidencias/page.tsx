@@ -1,15 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { Ticket as TicketIcon, Plus, Eye, UserPlus, CheckCircle, XCircle, Search } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Ticket as TicketIcon, Plus, Eye, UserPlus, CheckCircle, XCircle, Search, Loader2, AlertCircle } from 'lucide-react';
 import TicketModal from '@/components/soporte/TicketModal';
 import type { Ticket, EstadoTicket } from '@/lib/soporte';
-import { MOCK_TICKETS, PRIORIDAD_TICKET_CONFIG, ESTADO_TICKET_CONFIG } from '@/lib/soporte';
+import {
+  PRIORIDAD_TICKET_CONFIG, ESTADO_TICKET_CONFIG,
+  listarTickets, crearTicket, actualizarTicket, cambiarEstadoTicket,
+} from '@/lib/soporte';
 
 const ESTADOS: (EstadoTicket | 'Todos')[] = ['Todos', 'Abierto', 'En Progreso', 'Resuelto', 'Cerrado'];
+const TECNICO_POR_DEFECTO = 'Carlos Yupanqui';
 
 export default function IncidenciasPage() {
-  const [tickets, setTickets] = useState<Ticket[]>(MOCK_TICKETS);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [modalTicket, setModalTicket] = useState<Ticket | null | undefined>(undefined); // undefined=cerrado, null=nuevo
   const [filtroEstado, setFiltroEstado] = useState<string>('Todos');
   const [busca, setBusca]   = useState('');
@@ -20,23 +26,54 @@ export default function IncidenciasPage() {
     setTimeout(() => setToast(''), 3500);
   }
 
-  function handleGuardar(t: Ticket) {
-    setTickets(prev => {
-      const existe = prev.some(x => x.id === t.id);
-      return existe ? prev.map(x => x.id === t.id ? t : x) : [t, ...prev];
-    });
-    setModalTicket(undefined);
-    showToast('✓ Ticket guardado correctamente');
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError('');
+    try {
+      setTickets(await listarTickets());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar los tickets');
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  async function handleGuardar(t: Ticket) {
+    const editando = modalTicket != null; // habia un ticket en el modal (no es nuevo)
+    try {
+      const guardado = editando ? await actualizarTicket(modalTicket!.id, t) : await crearTicket(t);
+      setTickets(prev => editando
+        ? prev.map(x => x.id === guardado.id ? guardado : x)
+        : [guardado, ...prev]);
+      setModalTicket(undefined);
+      showToast('✓ Ticket guardado correctamente');
+    } catch (e) {
+      showToast(e instanceof Error ? `✗ ${e.message}` : '✗ No se pudo guardar');
+    }
   }
 
-  function cambiarEstado(id: string, estado: EstadoTicket) {
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, estado } : t));
-    showToast(`✓ Ticket marcado como ${estado}`);
+  async function cambiarEstado(id: string, estado: EstadoTicket) {
+    try {
+      const actualizado = await cambiarEstadoTicket(id, estado);
+      setTickets(prev => prev.map(t => t.id === id ? actualizado : t));
+      showToast(`✓ Ticket marcado como ${estado}`);
+    } catch (e) {
+      showToast(e instanceof Error ? `✗ ${e.message}` : '✗ No se pudo cambiar el estado');
+    }
   }
 
-  function asignar(id: string) {
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, asignadoA: 'Carlos Yupanqui', estado: t.estado === 'Abierto' ? 'En Progreso' : t.estado } : t));
-    showToast('✓ Ticket asignado a Carlos Yupanqui');
+  async function asignar(id: string) {
+    const actual = tickets.find(t => t.id === id);
+    const nuevoEstado: EstadoTicket = actual?.estado === 'Abierto' ? 'En Progreso' : (actual?.estado ?? 'En Progreso');
+    try {
+      const actualizado = await cambiarEstadoTicket(id, nuevoEstado, TECNICO_POR_DEFECTO);
+      setTickets(prev => prev.map(t => t.id === id ? actualizado : t));
+      showToast(`✓ Ticket asignado a ${TECNICO_POR_DEFECTO}`);
+    } catch (e) {
+      showToast(e instanceof Error ? `✗ ${e.message}` : '✗ No se pudo asignar');
+    }
   }
 
   const filtered = tickets.filter(t => {
@@ -70,6 +107,18 @@ export default function IncidenciasPage() {
           <Plus size={14} /> Nuevo Ticket
         </button>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-start gap-3">
+          <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-red-700">
+            <b>No se pudieron cargar los tickets.</b> {error}
+            <button onClick={cargar} className="ml-2 underline hover:text-red-800">Reintentar</button>
+            <p className="mt-1 text-red-500">Verifica que el <code>soporte-service</code> esté corriendo en el puerto 8083.</p>
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap gap-3 items-center">
@@ -106,7 +155,11 @@ export default function IncidenciasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map(t => (
+              {cargando ? (
+                <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">
+                  <Loader2 size={18} className="inline animate-spin mr-2" /> Cargando tickets…
+                </td></tr>
+              ) : filtered.map(t => (
                 <tr key={t.id} className={`hover:bg-gray-50/50 transition-colors ${t.prioridad === 'Crítica' && t.estado !== 'Cerrado' && t.estado !== 'Resuelto' ? 'bg-red-50/30' : ''}`}>
                   <td className="px-5 py-3 font-mono font-semibold text-blue-700">{t.nroTicket}</td>
                   <td className="px-5 py-3 font-medium text-gray-800 max-w-[200px] truncate">{t.titulo}</td>
@@ -149,7 +202,7 @@ export default function IncidenciasPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!cargando && filtered.length === 0 && (
                 <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400">No se encontraron tickets</td></tr>
               )}
             </tbody>

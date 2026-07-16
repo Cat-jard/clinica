@@ -1,43 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ObservacionTable from '@/components/triaje/ObservacionTable';
 import { PacienteObservacion } from '@/lib/vitals';
-
-const now = new Date();
-const MOCK: PacienteObservacion[] = [
-  {
-    id: 'obs-1',
-    nombre: 'Juan Pérez García',
-    horaIngreso: new Date(now.getTime() - 45 * 60000),
-    prioridad: 'III-AMARILLO',
-    motivo: 'Dolor abdominal — pendiente resultado de laboratorio',
-    kardex: [
-      {
-        id: 'k-1',
-        pacienteId: 'obs-1',
-        fechaHora: new Date(now.getTime() - 40 * 60000).toISOString(),
-        ingresosHidricos: 500,
-        egresosHidricos: 200,
-        medicamentos: [{ nombre: 'Ketorolaco', dosis: '30mg', via: 'IV', hora: '09:15' }],
-        evolucion: 'Paciente estable, dolor 6/10, tolera posición semisentada.',
-        firmado: true,
-        firmadoPor: 'Ana Ríos',
-      },
-    ],
-  },
-  {
-    id: 'obs-2',
-    nombre: 'María López Ruiz',
-    horaIngreso: new Date(now.getTime() - 20 * 60000),
-    prioridad: 'II-NARANJA',
-    motivo: 'Dificultad respiratoria — SpO₂ 91% al ingreso',
-    kardex: [],
-  },
-];
+import { getObservacionApi } from '@/lib/triaje';
 
 export default function ObservacionPage() {
-  const [pacientes, setPacientes] = useState<PacienteObservacion[]>(MOCK);
+  const [pacientes, setPacientes] = useState<PacienteObservacion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await getObservacionApi();
+        setPacientes(data.map((o: any) => ({
+          id: o.id,
+          nombre: o.pacienteNombre || o.nombre,
+          horaIngreso: new Date(o.horaIngreso || Date.now()),
+          prioridad: o.prioridad || 'IV-VERDE',
+          motivo: o.motivo || '',
+          kardex: (o.kardex || []).map((k: any) => ({
+            id: k.id,
+            pacienteId: k.pacienteId || o.id,
+            fechaHora: k.fechaHora || new Date().toISOString(),
+            ingresosHidricos: k.ingresosHidricos || 0,
+            egresosHidricos: k.egresosHidricos || 0,
+            medicamentos: k.medicamentos || [],
+            evolucion: k.evolucion || '',
+            firmado: k.firmado || false,
+            firmadoPor: k.firmadoPor,
+          })),
+        })));
+      } catch (err) {
+        console.error('Error loading observacion:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
   const pendingCount = pacientes.reduce(
     (acc, p) => acc + p.kardex.filter((k) => !k.firmado).length,
     0

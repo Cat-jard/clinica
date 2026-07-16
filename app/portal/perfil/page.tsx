@@ -1,15 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { User, Lock, ShieldCheck, Bell, FileText, Trash2, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Lock, ShieldCheck, Bell, FileText, Trash2, Save, Loader2 } from 'lucide-react';
 import PortalShell from '@/components/portal/PortalShell';
-import { MOCK_PERFIL } from '@/lib/paciente-portal';
+import { getPerfilPacienteApi, type PerfilPaciente } from '@/lib/paciente-portal';
 
 export default function PerfilPaciente() {
+  const [perfil, setPerfil] = useState<PerfilPaciente | null>(null);
+  const [loading, setLoading] = useState(true);
   const [mfa, setMfa]             = useState(true);
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifSms, setNotifSms]   = useState(false);
   const [toast, setToast]         = useState('');
+
+  useEffect(() => {
+    getPerfilPacienteApi().then(setPerfil).catch(() => {}).finally(() => setLoading(false));
+  }, []);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -24,22 +30,33 @@ export default function PerfilPaciente() {
         </div>
       )}
 
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-gray-400" />
+        </div>
+      )}
+
+      {!loading && !perfil && (
+        <div className="text-center py-12 text-sm text-gray-400">No se pudo cargar el perfil.</div>
+      )}
+
+      {perfil && (<>
       {/* Header de perfil */}
       <div className="flex flex-col items-center mb-6">
         <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center mb-3">
-          <span className="text-2xl font-bold text-white">{MOCK_PERFIL.nombre[0]}{MOCK_PERFIL.apellidos[0]}</span>
+          <span className="text-2xl font-bold text-white">{perfil.nombre[0]}{perfil.apellidos[0]}</span>
         </div>
-        <h1 className="text-lg font-bold text-gray-900">{MOCK_PERFIL.nombre} {MOCK_PERFIL.apellidos}</h1>
-        <p className="text-xs text-gray-500">DNI: {MOCK_PERFIL.dni}</p>
+        <h1 className="text-lg font-bold text-gray-900">{perfil.nombre} {perfil.apellidos}</h1>
+        <p className="text-xs text-gray-500">DNI: {perfil.dni}</p>
       </div>
 
       {/* Datos personales */}
       <Section Icon={User} title="Datos Personales">
-        <ReadField label="Fecha de Nacimiento" value={`${MOCK_PERFIL.fechaNac} (${MOCK_PERFIL.edad} años)`} />
-        <ReadField label="Sexo" value={MOCK_PERFIL.sexo} />
-        <EditField label="Correo Electrónico" value={MOCK_PERFIL.email} />
-        <EditField label="Teléfono Celular" value={MOCK_PERFIL.telefono} />
-        <EditField label="Dirección" value={MOCK_PERFIL.direccion} />
+        <ReadField label="Fecha de Nacimiento" value={`${perfil.fechaNac} (${perfil.edad} años)`} />
+        <ReadField label="Sexo" value={perfil.sexo} />
+        <EditField label="Correo Electrónico" value={perfil.email} />
+        <EditField label="Teléfono Celular" value={perfil.telefono} />
+        <EditField label="Dirección" value={perfil.direccion} />
         <button onClick={() => showToast('✓ Cambios guardados')}
           className="w-full flex items-center justify-center gap-1.5 bg-blue-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-blue-700 transition-colors mt-2">
           <Save size={14} /> Guardar Cambios
@@ -74,6 +91,7 @@ export default function PerfilPaciente() {
         className="w-full flex items-center justify-center gap-1.5 text-red-600 border border-red-200 rounded-2xl py-3 text-sm font-medium hover:bg-red-50 transition-colors mb-2">
         <Trash2 size={14} /> Solicitar Eliminación de Cuenta
       </button>
+    </>)}
     </PortalShell>
   );
 }

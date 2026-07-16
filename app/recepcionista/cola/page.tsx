@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { ClipboardCheck, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ClipboardCheck, Clock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
+import { getColaTriajeApi } from '@/lib/triaje';
 
 type Estado = 'En Espera' | 'En Atención' | 'Completado';
 
 interface Patient {
-  id: number;
+  id: string;
   name: string;
   dni: string;
   arrivalTime: string;
@@ -16,14 +17,6 @@ interface Patient {
   status: Estado;
   priority: 'Normal' | 'Urgente';
 }
-
-const INITIAL: Patient[] = [
-  { id: 1, name: 'Juan Pérez García',   dni: '12345678', arrivalTime: '08:15', doctor: 'Dr. Randy Gouse', specialty: 'Psicología',  status: 'En Atención', priority: 'Normal'  },
-  { id: 2, name: 'María López Ruiz',    dni: '23456789', arrivalTime: '08:42', doctor: 'Dr. Alex Pitols', specialty: 'Psicología',  status: 'En Espera',   priority: 'Normal'  },
-  { id: 3, name: 'Carlos Rodríguez',    dni: '34567890', arrivalTime: '09:05', doctor: 'Dra. Ana Torres', specialty: 'Cardiología', status: 'En Espera',   priority: 'Urgente' },
-  { id: 4, name: 'Ana Fernández Díaz',  dni: '45678901', arrivalTime: '09:18', doctor: 'Dr. Luis Díaz',   specialty: 'Pediatría',   status: 'En Espera',   priority: 'Normal'  },
-  { id: 5, name: 'Pedro Martínez',      dni: '56789012', arrivalTime: '09:30', doctor: 'Dr. Randy Gouse', specialty: 'Psicología',  status: 'Completado',  priority: 'Normal'  },
-];
 
 const STATUS_STYLE: Record<Estado, string> = {
   'En Espera':   'bg-yellow-50 text-yellow-600 border-yellow-100',
@@ -38,14 +31,39 @@ const STATUS_ICON: Record<Estado, React.ReactNode> = {
 };
 
 export default function ColaPage() {
-  const [patients, setPatients] = useState<Patient[]>(INITIAL);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
   const { success } = useToast();
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const cola = await getColaTriajeApi(today);
+        setPatients(cola.map((c, i) => ({
+          id: c.id,
+          name: c.pacienteNombre,
+          dni: '',
+          arrivalTime: c.horaLlegada,
+          doctor: c.medicoNombre || '—',
+          specialty: c.especialidad || '—',
+          status: 'En Espera' as Estado,
+          priority: 'Normal' as 'Normal' | 'Urgente',
+        })));
+      } catch (err) {
+        console.error('Error loading queue:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
   const enEspera   = patients.filter((p) => p.status === 'En Espera');
   const enAtencion = patients.filter((p) => p.status === 'En Atención');
   const completado = patients.filter((p) => p.status === 'Completado');
 
-  function advance(id: number) {
+  function advance(id: string) {
     setPatients((prev) =>
       prev.map((p) => {
         if (p.id !== id) return p;
@@ -69,6 +87,12 @@ export default function ColaPage() {
         <h1 className="text-2xl font-bold text-gray-900">Cola de Espera</h1>
         <p className="text-sm text-gray-400">Gestión en tiempo real de la sala de espera</p>
       </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-gray-400" />
+        </div>
+      ) : null}
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
@@ -99,6 +123,9 @@ export default function ColaPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
+            {!loading && patients.length === 0 && (
+              <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400">No hay pacientes en la cola de espera.</td></tr>
+            )}
             {patients.map((p, i) => (
               <tr key={p.id} className={`transition-colors ${p.status === 'Completado' ? 'opacity-50' : 'hover:bg-gray-50/50'}`}>
                 <td className="px-5 py-3 text-xs text-gray-400 font-mono">{i + 1}</td>

@@ -183,6 +183,78 @@ export const MOCK_ALERGIAS = ['Penicilina', 'AINEs (Ibuprofeno)'];
 export const MOCK_ANTECEDENTES = ['Hipertensión arterial (2020)', 'Apendicectomía (2015)'];
 export const MOCK_MEDICACION_ACTUAL = ['Metformina 850mg c/12h', 'Enalapril 10mg c/24h'];
 
+// ===================== API FUNCTIONS =====================
+import { authFetch, getUsuario } from './auth';
+import type { Cita } from './citas';
+
+/** Fetch patient profile using logged-in user's data. */
+export async function getPerfilPacienteApi(): Promise<PerfilPaciente | null> {
+  try {
+    const user = getUsuario();
+    if (!user) return null;
+    const res = await authFetch(`/api/pacientes/all?q=${encodeURIComponent(user.dni)}&size=1`);
+    if (!res.ok) return null;
+    const body = await res.json();
+    const pages = body.data?.content || body.data || [];
+    const p = Array.isArray(pages) ? pages[0] : null;
+    if (!p) return null;
+    return {
+      nombre: p.nombres,
+      apellidos: `${p.apellidoPaterno} ${p.apellidoMaterno}`,
+      dni: p.nroDocumento,
+      fechaNac: p.fechaNacimiento,
+      edad: calcEdadDesdeFecha(p.fechaNacimiento),
+      sexo: p.sexo,
+      email: p.email || user.email,
+      telefono: p.telefono,
+      direccion: p.direccion || '',
+    };
+  } catch { return null; }
+}
+
+function calcEdadDesdeFecha(fechaNac: string): number {
+  const hoy = new Date();
+  const nac = new Date(fechaNac);
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const m = hoy.getMonth() - nac.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+  return edad;
+}
+
+/** Fetch patient appointments from citas-service. */
+export async function getCitasPacienteApi(pacienteId: string): Promise<CitaPaciente[]> {
+  try {
+    const res = await authFetch(`/api/citas/paciente/${pacienteId}`);
+    if (!res.ok) return [];
+    const body = await res.json();
+    const data = body.data || body || [];
+    return (Array.isArray(data) ? data : []).map((c: Cita) => {
+      const fecha = new Date(c.fechaCita + 'T' + (c.horaInicio || '00:00'));
+      const today = new Date();
+      return {
+        id: c.id,
+        fecha: fecha.toLocaleDateString('es-PE'),
+        hora: c.horaInicio?.slice(0, 5) || '',
+        medico: c.medicoNombre || '',
+        especialidad: '',
+        motivo: c.motivo,
+        estado: mapEstadoCita(c.estado),
+        esFutura: fecha > today,
+      };
+    });
+  } catch { return []; }
+}
+
+function mapEstadoCita(estado: string): EstadoCitaPaciente {
+  switch (estado) {
+    case 'PROGRAMADA': return 'Programada';
+    case 'CONFIRMADA': return 'Confirmada';
+    case 'ATENDIDA': return 'Atendida';
+    case 'CANCELADA': return 'Cancelada';
+    default: return 'Programada';
+  }
+}
+
 // ===================== CONFIG / HELPERS =====================
 
 export const ESTADO_CITA_CONFIG: Record<EstadoCitaPaciente, { className: string }> = {

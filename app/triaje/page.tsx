@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import KpiCards from '@/components/triaje/KpiCards';
 import ColaTriaje from '@/components/triaje/ColaTriaje';
 import ClasificadosTable from '@/components/triaje/ClasificadosTable';
@@ -10,26 +10,59 @@ import TriageTimeChart from '@/components/triaje/charts/TriageTimeChart';
 import SpO2Gauge from '@/components/triaje/charts/SpO2Gauge';
 import TopMotivoChart from '@/components/triaje/charts/TopMotivoChart';
 import { PacienteEspera, PacienteClasificado } from '@/lib/vitals';
-
-const MOCK_COLA: PacienteEspera[] = [
-  { id: '1', ticket: 'T-0001', nombre: 'Carlos Rodríguez', dni: '34567890', fechaNac: '1978-11-08', horaLlegada: '08:05', motivo: 'Dolor abdominal agudo' },
-  { id: '2', ticket: 'T-0002', nombre: 'Ana Fernández Díaz', dni: '45678901', fechaNac: '1995-01-30', horaLlegada: '08:42', motivo: 'Dificultad para respirar' },
-  { id: '3', ticket: 'T-0003', nombre: 'Pedro Martínez', dni: '56789012', fechaNac: '1982-06-14', horaLlegada: '09:10', motivo: 'Cefalea intensa' },
-];
-
-const now = new Date();
-const MOCK_CLASIFICADOS: PacienteClasificado[] = [
-  { id: '4', ticket: 'T-004', nombre: 'Lucía Torres Salas', prioridad: 'II-NARANJA', destino: 'Emergencias', horaClasificado: new Date(now.getTime() - 8 * 60000), estado: 'Esperando' },
-  { id: '5', ticket: 'T-005', nombre: 'Roberto Saenz', prioridad: 'III-AMARILLO', destino: 'Consultorio prioritario', horaClasificado: new Date(now.getTime() - 35 * 60000), estado: 'Esperando' },
-  { id: '6', ticket: 'T-006', nombre: 'Carmen Villanueva', prioridad: 'IV-VERDE', destino: 'Consultorio normal', horaClasificado: new Date(now.getTime() - 90 * 60000), estado: 'Esperando' },
-];
+import { getColaTriajeApi, listRegistrosTriajeApi, getTriajeKPIsApi, type TriajeKPIs } from '@/lib/triaje';
 
 export default function TriajeDashboard() {
-  const [cola] = useState<PacienteEspera[]>(MOCK_COLA);
-  const [clasificados] = useState<PacienteClasificado[]>(MOCK_CLASIFICADOS);
+  const [cola, setCola] = useState<PacienteEspera[]>([]);
+  const [clasificados, setClasificados] = useState<PacienteClasificado[]>([]);
+  const [registrosCount, setRegistrosCount] = useState(0);
+  const [kpis, setKpis] = useState<TriajeKPIs | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const rojo = clasificados.filter((p) => p.prioridad === 'I-ROJO').length;
-  const naranja = clasificados.filter((p) => p.prioridad === 'II-NARANJA').length;
+  useEffect(() => {
+    async function load() {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const [colaData, registros, kpiData] = await Promise.all([
+          getColaTriajeApi(today),
+          listRegistrosTriajeApi(today),
+          getTriajeKPIsApi(today),
+        ]);
+
+        setCola(colaData.map((c) => ({
+          id: c.id,
+          ticket: c.ticket,
+          nombre: c.pacienteNombre,
+          dni: '',
+          fechaNac: '',
+          horaLlegada: c.horaLlegada,
+          motivo: c.motivo || '',
+        })));
+
+        setRegistrosCount(registros.length);
+        setClasificados(registros.map((r) => ({
+          id: r.id,
+          ticket: r.ticket,
+          nombre: r.pacienteNombre,
+          prioridad: r.prioridad,
+          destino: (r as any).destino || '',
+          horaClasificado: new Date(r.timestamp || Date.now()),
+          estado: 'Esperando',
+        })));
+
+        setKpis(kpiData);
+      } catch (err) {
+        console.error('Error loading triaje data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const rojo = kpis?.rojo ?? clasificados.filter((p) => p.prioridad === 'I-ROJO').length;
+  const naranja = kpis?.naranja ?? clasificados.filter((p) => p.prioridad === 'II-NARANJA').length;
+  const tiempoPromedio = kpis ? Math.round(kpis.totalTriajes / Math.max(1, registrosCount)) : 0;
 
   return (
     <div className="space-y-4">
@@ -38,7 +71,7 @@ export default function TriajeDashboard() {
         <p className="text-sm text-gray-400">Gestión de prioridades — Enfermería</p>
       </div>
 
-      <KpiCards enEspera={cola.length} rojo={rojo} naranja={naranja} tiempoPromedio={6} />
+      <KpiCards enEspera={cola.length} rojo={rojo} naranja={naranja} tiempoPromedio={tiempoPromedio} />
 
       {/* Gráficas fila 1 */}
       <div className="grid gap-4" style={{ gridTemplateColumns: '2fr 1fr 1fr' }}>

@@ -1,15 +1,36 @@
 'use client';
 
+import { useState } from 'react';
 import { BedDouble, ArrowRightLeft, LogOut, User, Calendar, Stethoscope, Clock } from 'lucide-react';
 import ModalBase from '@/components/modals/ModalBase';
 import type { Cama } from '@/lib/admin';
+import { liberarCamaApi } from '@/lib/hospitalizacion';
+import { useToast } from '@/context/ToastContext';
 
 interface CamaDetalleModalProps {
   cama: Cama;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-export default function CamaDetalleModal({ cama, onClose }: CamaDetalleModalProps) {
+export default function CamaDetalleModal({ cama, onClose, onSuccess }: CamaDetalleModalProps) {
+  const [submitting, setSubmitting] = useState(false);
+  const { success, error } = useToast();
+
+  async function handleLiberar() {
+    setSubmitting(true);
+    try {
+      await liberarCamaApi(cama.id);
+      success(`Se dio de alta al paciente y la cama ${cama.numero} quedó liberada.`);
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (err: any) {
+      error(err.message || 'Error al dar de alta al paciente.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <ModalBase title={`Cama ${cama.numero} — ${cama.servicio}`} onClose={onClose} width="max-w-md">
       <div className="p-6 space-y-4">
@@ -23,11 +44,11 @@ export default function CamaDetalleModal({ cama, onClose }: CamaDetalleModalProp
               <Row Icon={Clock}       label="Días de Estancia" value={`${cama.diasEstancia} día(s)`} />
             </div>
             <div className="flex gap-2 pt-3 border-t border-gray-100">
-              <button className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors">
+              <button disabled={submitting} className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors disabled:opacity-50">
                 <ArrowRightLeft size={14} /> Trasladar
               </button>
-              <button className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 transition-colors">
-                <LogOut size={14} /> Dar de Alta
+              <button onClick={handleLiberar} disabled={submitting} className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 transition-colors disabled:opacity-50">
+                <LogOut size={14} /> {submitting ? 'Cargando…' : 'Dar de Alta'}
               </button>
             </div>
           </>

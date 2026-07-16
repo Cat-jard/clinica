@@ -1,15 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, UserPlus, User } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, UserPlus, User, Loader2 } from 'lucide-react';
 import ModalBase from './ModalBase';
-
-const MOCK_PATIENTS = [
-  { dni: '12345678', name: 'Juan Pérez García',    dob: '1985-03-12', phone: '987654321' },
-  { dni: '23456789', name: 'María López Ruiz',     dob: '1990-07-25', phone: '912345678' },
-  { dni: '34567890', name: 'Carlos Rodríguez Silva', dob: '1978-11-08', phone: '965432198' },
-  { dni: '45678901', name: 'Ana Fernández Díaz',   dob: '1995-01-30', phone: '934567890' },
-];
+import { listPacientesApi, type Paciente } from '@/lib/recepcion';
 
 interface Props {
   onClose: () => void;
@@ -18,16 +12,24 @@ interface Props {
 
 export default function SearchPatientModal({ onClose, onNewPatient }: Props) {
   const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Paciente[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const results = query.trim().length >= 2
-    ? MOCK_PATIENTS.filter(
-        (p) =>
-          p.dni.includes(query.trim()) ||
-          p.name.toLowerCase().includes(query.trim().toLowerCase()),
-      )
-    : [];
+  useEffect(() => {
+    if (query.trim().length < 2) { setResults([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    listPacientesApi(query.trim()).then((data) => {
+      if (!cancelled) setResults(data);
+    }).catch(() => {
+      if (!cancelled) setResults([]);
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [query]);
 
-  const noResults = query.trim().length >= 2 && results.length === 0;
+  const noResults = query.trim().length >= 2 && !loading && results.length === 0;
 
   return (
     <ModalBase title="Buscar Paciente" onClose={onClose}>
@@ -46,19 +48,25 @@ export default function SearchPatientModal({ onClose, onNewPatient }: Props) {
         </div>
 
         {/* Results */}
-        {results.length > 0 && (
+        {loading && (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 size={20} className="animate-spin text-gray-400" />
+          </div>
+        )}
+
+        {!loading && results.length > 0 && (
           <ul className="space-y-2">
             {results.map((p) => (
               <li
-                key={p.dni}
+                key={p.id}
                 className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-colors group"
               >
                 <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                   <User size={16} className="text-blue-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{p.name}</p>
-                  <p className="text-xs text-gray-400">DNI: {p.dni} · Tel: {p.phone}</p>
+                  <p className="text-sm font-semibold text-gray-800">{p.nombres} {p.apellidoPaterno} {p.apellidoMaterno}</p>
+                  <p className="text-xs text-gray-400">DNI: {p.nroDocumento} · Tel: {p.telefono}</p>
                 </div>
                 <span className="text-xs text-blue-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                   Ver ficha →

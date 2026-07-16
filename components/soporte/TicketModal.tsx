@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Paperclip, Save } from 'lucide-react';
 import ModalBase from '@/components/modals/ModalBase';
 import type { Ticket, PrioridadTicket } from '@/lib/soporte';
-import { MODULOS_SISTEMA, PRIORIDAD_TICKET_CONFIG, ESTADO_TICKET_CONFIG, TECNICOS } from '@/lib/soporte';
+import { CATEGORIAS_TICKET, PRIORIDAD_TICKET_CONFIG, ESTADO_TICKET_CONFIG, TECNICOS } from '@/lib/soporte';
 
 interface TicketModalProps {
   ticket: Ticket | null;          // null = creación
@@ -18,7 +18,7 @@ export default function TicketModal({ ticket, onClose, onGuardar }: TicketModalP
   const [titulo, setTitulo]       = useState(ticket?.titulo ?? '');
   const [descripcion, setDesc]    = useState(ticket?.descripcion ?? '');
   const [prioridad, setPrioridad] = useState<PrioridadTicket>(ticket?.prioridad ?? 'Media');
-  const [modulo, setModulo]       = useState(ticket?.modulo ?? MODULOS_SISTEMA[0]);
+  const [modulo, setModulo]       = useState(ticket?.modulo ?? CATEGORIAS_TICKET[0]);
   const [asignado, setAsignado]   = useState(ticket?.asignadoA ?? 'Sin asignar');
 
   const canGuardar = titulo.trim() && descripcion.trim();
@@ -70,10 +70,10 @@ export default function TicketModal({ ticket, onClose, onGuardar }: TicketModalP
             </select>
           </div>
           <div>
-            <label className="block text-gray-600 font-medium mb-1">Módulo Afectado <span className="text-red-500">*</span></label>
+            <label className="block text-gray-600 font-medium mb-1">Categoría <span className="text-red-500">*</span></label>
             <select value={modulo} onChange={e => setModulo(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-              {MODULOS_SISTEMA.map(m => <option key={m}>{m}</option>)}
+              {CATEGORIAS_TICKET.map(m => <option key={m}>{m}</option>)}
             </select>
           </div>
           <div>

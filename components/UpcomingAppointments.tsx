@@ -11,6 +11,7 @@ import CoverageModal from './modals/CoverageModal';
 import { useToast } from '@/context/ToastContext';
 
 interface Appointment {
+  id: string;
   time: string;
   patient: string;
   doctor: string;
@@ -20,11 +21,11 @@ interface Appointment {
 }
 
 const INITIAL_APPOINTMENTS: Appointment[] = [
-  { time: '10:00', patient: 'Juan Pérez García',   doctor: 'Dr. Randy Gouse', specialty: 'Psicología',  status: 'Confirmada', hasConsent: true  },
-  { time: '10:30', patient: 'María López Ruiz',    doctor: 'Dr. Alex Pitols', specialty: 'Psicología',  status: 'Pendiente',  hasConsent: false },
-  { time: '11:00', patient: 'Carlos Rodríguez',    doctor: 'Dra. Ana Torres', specialty: 'Cardiología', status: 'Confirmada', hasConsent: true  },
-  { time: '11:30', patient: 'Ana Fernández Díaz',  doctor: 'Dr. Luis Díaz',   specialty: 'Pediatría',   status: 'Pendiente',  hasConsent: false },
-  { time: '12:00', patient: 'Pedro Martínez',      doctor: 'Dr. Randy Gouse', specialty: 'Psicología',  status: 'Confirmada', hasConsent: true  },
+  { id: 'apt-1', time: '10:00', patient: 'Juan Pérez García',   doctor: 'Dr. Randy Gouse', specialty: 'Psicología',  status: 'Confirmada', hasConsent: true  },
+  { id: 'apt-2', time: '10:30', patient: 'María López Ruiz',    doctor: 'Dr. Alex Pitols', specialty: 'Psicología',  status: 'Pendiente',  hasConsent: false },
+  { id: 'apt-3', time: '11:00', patient: 'Carlos Rodríguez',    doctor: 'Dra. Ana Torres', specialty: 'Cardiología', status: 'Confirmada', hasConsent: true  },
+  { id: 'apt-4', time: '11:30', patient: 'Ana Fernández Díaz',  doctor: 'Dr. Luis Díaz',   specialty: 'Pediatría',   status: 'Pendiente',  hasConsent: false },
+  { id: 'apt-5', time: '12:00', patient: 'Pedro Martínez',      doctor: 'Dr. Randy Gouse', specialty: 'Psicología',  status: 'Confirmada', hasConsent: true  },
 ];
 
 const STATUS_STYLE: Record<string, string> = {
