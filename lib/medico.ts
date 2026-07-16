@@ -265,7 +265,7 @@ export async function listCitasMedicoApi(): Promise<CitaDia[]> {
       pacienteNombre: c.pacienteNombre || '',
       pacienteDni: '',
       motivoResumen: c.motivo,
-      estado: (c.estado === 'PROGRAMADA' ? 'Pendiente' : c.estado === 'CONFIRMADA' ? 'Confirmada' : c.estado === 'ATENDIDA' ? 'Atendida' : 'Pendiente') as CitaDia['estado'],
+      estado: (c.estado === 'PROGRAMADA' ? 'Pendiente' : c.estado === 'ATENDIDA' ? 'Atendida' : 'Pendiente') as CitaDia['estado'],
     }));
   } catch {
     return [];
