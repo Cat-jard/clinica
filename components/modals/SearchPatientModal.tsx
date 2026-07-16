@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, UserPlus, User, Loader2 } from 'lucide-react';
 import ModalBase from './ModalBase';
-import { listPacientesApi, type Paciente } from '@/lib/recepcion';
+import { listarPacientes, type PacienteResumen } from '@/lib/recepcion';
 
 interface Props {
   onClose: () => void;
@@ -12,14 +12,14 @@ interface Props {
 
 export default function SearchPatientModal({ onClose, onNewPatient }: Props) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Paciente[]>([]);
+  const [results, setResults] = useState<PacienteResumen[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (query.trim().length < 2) { setResults([]); return; }
     let cancelled = false;
     setLoading(true);
-    listPacientesApi(query.trim()).then((data) => {
+    listarPacientes(query.trim()).then((data) => {
       if (!cancelled) setResults(data);
     }).catch(() => {
       if (!cancelled) setResults([]);
