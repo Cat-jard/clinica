@@ -1,40 +1,42 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Search, UserPlus, Filter } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Search, UserPlus, Filter, Loader2, AlertCircle } from 'lucide-react';
 import NewPatientModal from '@/components/modals/NewPatientModal';
 import CoverageModal from '@/components/modals/CoverageModal';
-import { listPacientesApi, Paciente } from '@/lib/recepcion';
+import {
+  listarPacientes, nombreCompleto, fechaCorta, type PacienteResumen,
+} from '@/lib/recepcion';
 
 type Modal = 'newPatient' | 'coverage' | null;
 
 export default function PacientesPage() {
+  const [pacientes, setPacientes] = useState<PacienteResumen[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState<Modal>(null);
-  const [selected, setSelected] = useState<Paciente | null>(null);
-  const [patients, setPatients] = useState<Paciente[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<PacienteResumen | null>(null);
 
-  async function fetchPatients() {
-    setLoading(true);
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError('');
     try {
-      const data = await listPacientesApi(query);
-      setPatients(data);
-    } catch (err) {
-      console.error('Error fetching patients:', err);
+      setPacientes(await listarPacientes());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar pacientes');
     } finally {
-      setLoading(false);
+      setCargando(false);
     }
-  }
+  }, []);
 
-  useEffect(() => {
-    // Fetch patients when query changes (simple search)
-    const delayDebounceFn = setTimeout(() => {
-      fetchPatients();
-    }, 300);
+  useEffect(() => { cargar(); }, [cargar]);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [query]);
+  const filtered = pacientes.filter(
+    (p) =>
+      p.nroDocumento.includes(query) ||
+      nombreCompleto(p).toLowerCase().includes(query.toLowerCase()),
+  );
 
   return (
     <>
@@ -67,77 +69,73 @@ export default function PacientesPage() {
           <button className="flex items-center gap-1.5 border border-gray-200 text-gray-500 text-sm px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
             <Filter size={14} /> Filtrar
           </button>
-          <span className="text-xs text-gray-400">{patients.length} pacientes</span>
+          <span className="text-xs text-gray-400">{filtered.length} pacientes</span>
         </div>
 
         {/* Table */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          {loading ? (
-            <div className="py-12 text-center text-sm text-gray-400">Cargando pacientes…</div>
-          ) : (
-            <>
-              <table className="w-full text-sm">
-                <thead className="border-b border-gray-100 bg-gray-50/50">
-                  <tr>
-                    {['DNI', 'Paciente', 'Fecha Nac.', 'Teléfono', 'Seguro', 'Consentimiento', 'Acciones'].map((h) => (
-                      <th key={h} className="text-left px-5 py-3 text-xs text-gray-400 font-medium">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {patients.map((p, i) => (
-                    <tr key={p.id || i} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-5 py-3 font-mono text-xs text-gray-500">{p.nroDocumento}</td>
-                      <td className="px-5 py-3 font-semibold text-gray-800">
-                        {p.nombres} {p.apellidoPaterno} {p.apellidoMaterno}
-                      </td>
-                      <td className="px-5 py-3 text-gray-500">{p.fechaNacimiento}</td>
-                      <td className="px-5 py-3 text-gray-500">{p.telefono}</td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
-                          {p.aseguradora}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3">
-                        {p.consentimiento === 'Aceptado' || p.consentimiento ? (
-                          <span className="text-xs font-semibold text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">Firmado</span>
-                        ) : (
-                          <span className="text-xs font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">Pendiente</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        <button
-                          onClick={() => { setSelected(p); setModal('coverage'); }}
-                          className="text-xs text-blue-600 hover:underline font-medium"
-                        >
-                          Ver cobertura
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {patients.length === 0 && (
-                <div className="py-12 text-center text-sm text-gray-400">
-                  No se encontraron pacientes.
-                </div>
-              )}
-            </>
+          {error && (
+            <div className="flex items-center gap-2 px-5 py-3 bg-red-50 border-b border-red-100 text-sm text-red-600">
+              <AlertCircle size={15} /> {error}
+              <button onClick={cargar} className="ml-auto text-xs font-medium underline">Reintentar</button>
+            </div>
+          )}
+          <table className="w-full text-sm">
+            <thead className="border-b border-gray-100 bg-gray-50/50">
+              <tr>
+                {['DNI', 'Paciente', 'Fecha Nac.', 'Teléfono', 'Seguro', 'Consentimiento', 'Acciones'].map((h) => (
+                  <th key={h} className="text-left px-5 py-3 text-xs text-gray-400 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filtered.map((p) => (
+                <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-5 py-3 font-mono text-xs text-gray-500">{p.nroDocumento}</td>
+                  <td className="px-5 py-3 font-semibold text-gray-800">{nombreCompleto(p)}</td>
+                  <td className="px-5 py-3 text-gray-500">{fechaCorta(p.fechaNacimiento)}</td>
+                  <td className="px-5 py-3 text-gray-500">{p.telefono}</td>
+                  <td className="px-5 py-3">
+                    <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+                      {p.aseguradora}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    {p.consentimiento === 'Firmado'
+                      ? <span className="text-xs font-semibold text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">Firmado</span>
+                      : <span className="text-xs font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">Pendiente</span>
+                    }
+                  </td>
+                  <td className="px-5 py-3">
+                    <button
+                      onClick={() => { setSelected(p); setModal('coverage'); }}
+                      className="text-xs text-blue-600 hover:underline font-medium"
+                    >
+                      Ver cobertura
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {cargando && (
+            <div className="py-12 flex items-center justify-center gap-2 text-sm text-gray-400">
+              <Loader2 size={16} className="animate-spin" /> Cargando pacientes…
+            </div>
+          )}
+          {!cargando && !error && filtered.length === 0 && (
+            <div className="py-12 text-center text-sm text-gray-400">
+              {query ? `No se encontraron pacientes para "${query}".` : 'No hay pacientes registrados.'}
+            </div>
           )}
         </div>
       </div>
 
       {modal === 'newPatient' && (
-        <NewPatientModal
-          onClose={() => setModal(null)}
-          onSuccess={fetchPatients}
-        />
+        <NewPatientModal onClose={() => setModal(null)} onCreated={cargar} />
       )}
       {modal === 'coverage' && selected && (
-        <CoverageModal
-          patientName={`${selected.nombres} ${selected.apellidoPaterno}`}
-          onClose={() => setModal(null)}
-        />
+        <CoverageModal patientName={nombreCompleto(selected)} onClose={() => setModal(null)} />
       )}
     </>
   );

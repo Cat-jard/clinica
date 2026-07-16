@@ -1,40 +1,82 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Loader2, AlertCircle } from 'lucide-react';
 import VisorDICOM from '@/components/radiologo/VisorDICOM';
 import InformeRadiologico from '@/components/radiologo/InformeRadiologico';
 import type { EstudioImagen, InformeRadiologico as TInforme } from '@/lib/radiologia';
-import { MOCK_ESTUDIOS } from '@/lib/radiologia';
+import {
+  obtenerEstudio, iniciarEstudio, guardarBorradorEstudio, firmarEstudio,
+} from '@/lib/radiologia';
 
 export default function LecturaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const base = MOCK_ESTUDIOS.find(e => e.id === id);
-  if (!base) notFound();
+  const [estudio, setEstudio] = useState<EstudioImagen | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
 
-  const [estudio, setEstudio] = useState<EstudioImagen>(base);
-  const [toast, setToast]     = useState('');
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        let e = await obtenerEstudio(id);
+        // Al abrir un estudio pendiente, se marca el inicio de la lectura.
+        if (e.estado === 'Pendiente') {
+          try { e = await iniciarEstudio(id); } catch { /* no bloquea la lectura */ }
+        }
+        if (vivo) setEstudio(e);
+      } catch (err) {
+        if (vivo) setError(err instanceof Error ? err.message : 'No se pudo cargar el estudio');
+      } finally {
+        if (vivo) setCargando(false);
+      }
+    })();
+    return () => { vivo = false; };
+  }, [id]);
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(''), 3500);
   }
 
-  function handleGuardarBorrador(informe: TInforme) {
-    setEstudio(prev => ({ ...prev, informe, estado: 'Borrador' }));
-    showToast('✓ Borrador guardado correctamente');
+  async function handleGuardarBorrador(informe: TInforme) {
+    try {
+      setEstudio(await guardarBorradorEstudio(id, informe));
+      showToast('✓ Borrador guardado correctamente');
+    } catch (e) {
+      showToast(e instanceof Error ? `✗ ${e.message}` : '✗ Error al guardar el borrador');
+    }
   }
 
-  function handleFirmar(informe: TInforme, urgente: boolean) {
-    const firmadoEn = new Date().toLocaleDateString('es-PE', {
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    }).replace(',', ' -');
-    setEstudio(prev => ({ ...prev, informe, estado: 'Firmado', firmadoEn, esCritico: urgente }));
-    showToast(urgente
-      ? '✓ Informe firmado y alerta URGENTE enviada al médico tratante'
-      : '✓ Informe firmado y enviado a la Historia Clínica');
+  async function handleFirmar(informe: TInforme, urgente: boolean) {
+    try {
+      setEstudio(await firmarEstudio(id, informe, urgente));
+      showToast(urgente
+        ? '✓ Informe firmado y alerta URGENTE enviada al médico tratante'
+        : '✓ Informe firmado y enviado a la Historia Clínica');
+    } catch (e) {
+      showToast(e instanceof Error ? `✗ ${e.message}` : '✗ Error al firmar el informe');
+    }
+  }
+
+  if (cargando) {
+    return (
+      <div className="px-4 py-16 flex items-center justify-center gap-2 text-sm text-gray-400">
+        <Loader2 size={16} className="animate-spin" /> Cargando estudio…
+      </div>
+    );
+  }
+
+  if (error || !estudio) {
+    return (
+      <div className="px-4 py-16 flex flex-col items-center gap-3 text-center">
+        <AlertCircle size={28} className="text-red-500" />
+        <p className="text-sm text-gray-600">{error || 'Estudio no encontrado.'}</p>
+        <Link href="/radiologo" className="text-sm text-blue-600 hover:underline">← Volver al panel</Link>
+      </div>
+    );
   }
 
   return (

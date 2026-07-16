@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import ModalBase from './ModalBase';
 import { useToast } from '@/context/ToastContext';
-import { cancelCitaApi } from '@/lib/citas';
 
 const MOTIVOS = [
   'Paciente no se presentó',
@@ -15,22 +14,23 @@ const MOTIVOS = [
   'Otro motivo',
 ];
 
+interface Appointment {
+  time: string;
+  patient: string;
+  doctor: string;
+}
+
 interface Props {
-  appointment: {
-    id: string;
-    patient: string;
-    doctor: string;
-    time: string;
-  };
+  appointment: Appointment;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (motivo: string) => Promise<void> | void;
 }
 
 export default function CancelAppointmentModal({ appointment, onClose, onConfirm }: Props) {
   const [motivo, setMotivo] = useState('');
   const [detalle, setDetalle] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const { success, error } = useToast();
+  const [procesando, setProcesando] = useState(false);
+  const { error } = useToast();
 
   async function handleConfirm() {
     if (!motivo) { error('Debe seleccionar un motivo de cancelación (requerido por trazabilidad).'); return; }
@@ -38,17 +38,12 @@ export default function CancelAppointmentModal({ appointment, onClose, onConfirm
       error('Debe describir el motivo de cancelación.');
       return;
     }
-    
-    const finalMotivo = motivo === 'Otro motivo' ? detalle : motivo;
-    setSubmitting(true);
+    const motivoFinal = motivo === 'Otro motivo' ? detalle.trim() : motivo;
+    setProcesando(true);
     try {
-      await cancelCitaApi(appointment.id, finalMotivo, 'Recepcionista');
-      success(`Cita de ${appointment.patient} cancelada. Motivo registrado.`);
-      onConfirm();
-    } catch (err: any) {
-      error(err.message || 'Error al cancelar la cita.');
+      await onConfirm(motivoFinal);
     } finally {
-      setSubmitting(false);
+      setProcesando(false);
     }
   }
 
@@ -80,7 +75,6 @@ export default function CancelAppointmentModal({ appointment, onClose, onConfirm
                   value={m}
                   checked={motivo === m}
                   onChange={() => setMotivo(m)}
-                  disabled={submitting}
                   className="accent-blue-600"
                 />
                 <span className="text-sm text-gray-700">{m}</span>
@@ -99,7 +93,6 @@ export default function CancelAppointmentModal({ appointment, onClose, onConfirm
               value={detalle}
               onChange={(e) => setDetalle(e.target.value)}
               rows={3}
-              disabled={submitting}
               placeholder="Describa el motivo detalladamente…"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
@@ -110,17 +103,17 @@ export default function CancelAppointmentModal({ appointment, onClose, onConfirm
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
           <button
             onClick={onClose}
-            disabled={submitting}
+            disabled={procesando}
             className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Volver
           </button>
           <button
             onClick={handleConfirm}
-            disabled={submitting}
+            disabled={procesando}
             className="px-5 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
           >
-            {submitting ? 'Cancelando…' : 'Confirmar Cancelación'}
+            {procesando ? 'Cancelando…' : 'Confirmar Cancelación'}
           </button>
         </div>
       </div>

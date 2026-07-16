@@ -1,68 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import KpiCards from '@/components/triaje/KpiCards';
-import ColaTriaje from '@/components/triaje/ColaTriaje';
+import { useEffect, useState } from 'react';
+import { Loader2, AlertCircle } from 'lucide-react';
+import KpiCards          from '@/components/triaje/KpiCards';
+import ColaTriaje        from '@/components/triaje/ColaTriaje';
 import ClasificadosTable from '@/components/triaje/ClasificadosTable';
-import PriorityDonut from '@/components/triaje/charts/PriorityDonut';
+import PriorityDonut     from '@/components/triaje/charts/PriorityDonut';
 import HourlyArrivalsChart from '@/components/triaje/charts/HourlyArrivalsChart';
-import TriageTimeChart from '@/components/triaje/charts/TriageTimeChart';
-import SpO2Gauge from '@/components/triaje/charts/SpO2Gauge';
-import TopMotivoChart from '@/components/triaje/charts/TopMotivoChart';
-import { PacienteEspera, PacienteClasificado } from '@/lib/vitals';
-import { getColaTriajeApi, listRegistrosTriajeApi, getTriajeKPIsApi, type TriajeKPIs } from '@/lib/triaje';
+import TriageTimeChart   from '@/components/triaje/charts/TriageTimeChart';
+import SpO2Gauge         from '@/components/triaje/charts/SpO2Gauge';
+import TopMotivoChart    from '@/components/triaje/charts/TopMotivoChart';
+import {
+  type PacienteEspera, type PacienteClasificado,
+  obtenerColaTriajeAPI, colaAPacienteEspera, listarClasificados,
+} from '@/lib/vitals';
 
 export default function TriajeDashboard() {
-  const [cola, setCola] = useState<PacienteEspera[]>([]);
+  const [cola, setCola]                 = useState<PacienteEspera[]>([]);
   const [clasificados, setClasificados] = useState<PacienteClasificado[]>([]);
-  const [registrosCount, setRegistrosCount] = useState(0);
-  const [kpis, setKpis] = useState<TriajeKPIs | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [cargando, setCargando]         = useState(true);
+  const [error, setError]               = useState('');
 
   useEffect(() => {
-    async function load() {
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        const [colaData, registros, kpiData] = await Promise.all([
-          getColaTriajeApi(today),
-          listRegistrosTriajeApi(today),
-          getTriajeKPIsApi(today),
-        ]);
-
-        setCola(colaData.map((c) => ({
-          id: c.id,
-          ticket: c.ticket,
-          nombre: c.pacienteNombre,
-          dni: '',
-          fechaNac: '',
-          horaLlegada: c.horaLlegada,
-          motivo: c.motivo || '',
-        })));
-
-        setRegistrosCount(registros.length);
-        setClasificados(registros.map((r) => ({
-          id: r.id,
-          ticket: r.ticket,
-          nombre: r.pacienteNombre,
-          prioridad: r.prioridad,
-          destino: (r as any).destino || '',
-          horaClasificado: new Date(r.timestamp || Date.now()),
-          estado: 'Esperando',
-        })));
-
-        setKpis(kpiData);
-      } catch (err) {
-        console.error('Error loading triaje data:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+    let vivo = true;
+    Promise.all([obtenerColaTriajeAPI(), listarClasificados()])
+      .then(([c, cl]) => { if (vivo) { setCola(c.map(colaAPacienteEspera)); setClasificados(cl); } })
+      .catch((e) => { if (vivo) setError(e instanceof Error ? e.message : 'Error al cargar triaje'); })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
   }, []);
 
-  const rojo = kpis?.rojo ?? clasificados.filter((p) => p.prioridad === 'I-ROJO').length;
-  const naranja = kpis?.naranja ?? clasificados.filter((p) => p.prioridad === 'II-NARANJA').length;
-  const tiempoPromedio = kpis ? Math.round(kpis.totalTriajes / Math.max(1, registrosCount)) : 0;
+  const rojo    = clasificados.filter((p) => p.prioridad === 'I-ROJO').length;
+  const naranja = clasificados.filter((p) => p.prioridad === 'II-NARANJA').length;
 
   return (
     <div className="space-y-4">
@@ -71,7 +40,18 @@ export default function TriajeDashboard() {
         <p className="text-sm text-gray-400">Gestión de prioridades — Enfermería</p>
       </div>
 
-      <KpiCards enEspera={cola.length} rojo={rojo} naranja={naranja} tiempoPromedio={tiempoPromedio} />
+      {error && (
+        <div className="flex items-center gap-2 px-5 py-3 bg-red-50 border border-red-100 rounded-2xl text-sm text-red-600">
+          <AlertCircle size={15} /> {error}
+        </div>
+      )}
+      {cargando && (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Loader2 size={14} className="animate-spin" /> Cargando datos de triaje…
+        </div>
+      )}
+
+      <KpiCards enEspera={cola.length} rojo={rojo} naranja={naranja} tiempoPromedio={6} />
 
       {/* Gráficas fila 1 */}
       <div className="grid gap-4" style={{ gridTemplateColumns: '2fr 1fr 1fr' }}>

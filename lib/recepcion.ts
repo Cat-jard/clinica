@@ -1,133 +1,140 @@
-import { authFetch, errorMensaje } from './auth';
+// ============================================================
+// Integración con recepcion-service (pacientes y cola de espera)
+// Todo el tráfico pasa por el API Gateway (NEXT_PUBLIC_API_URL, :8080),
+// que enruta /api/pacientes y /api/cola hacia recepcion-service (:8001).
+// ============================================================
+import { authFetch, errorMensaje } from '@/lib/auth';
 
-// Local store for patients created in this session — compensates for
-// PacienteResumenResponse lacking fechaNacimiento / telefono fields.
-const PACIENTES_STORE = new Map<string, Paciente>();
+// ===================== TIPOS =====================
 
-const MOCK_MEDICOS: Medico[] = [
-  { id: 1, dni: '12345678', nombre: 'Carlos', apellidos: 'López García', email: 'carlos.lopez@clinica.com', telefono: '999111000', rol: 'MEDICO', especialidad: 'Medicina General', estado: 'ACTIVO' },
-  { id: 2, dni: '23456789', nombre: 'María', apellidos: 'Fernández Torres', email: 'maria.fernandez@clinica.com', telefono: '999111001', rol: 'MEDICO', especialidad: 'Pediatría', estado: 'ACTIVO' },
-  { id: 3, dni: '34567890', nombre: 'José', apellidos: 'Ramírez Mendoza', email: 'jose.ramirez@clinica.com', telefono: '999111002', rol: 'MEDICO', especialidad: 'Cardiología', estado: 'ACTIVO' },
-  { id: 4, dni: '45678901', nombre: 'Ana', apellidos: 'Gutiérrez Rojas', email: 'ana.gutierrez@clinica.com', telefono: '999111003', rol: 'MEDICO', especialidad: 'Traumatología', estado: 'ACTIVO' },
-  { id: 5, dni: '56789012', nombre: 'Luis', apellidos: 'Vargas Paredes', email: 'luis.vargas@clinica.com', telefono: '999111004', rol: 'MEDICO', especialidad: 'Medicina General', estado: 'ACTIVO' },
-];
-
-const MOCK_PACIENTES: Paciente[] = [
-  { id: '1', tipoDocumento: 'DNI', nroDocumento: '11111111', apellidoPaterno: 'Quispe', apellidoMaterno: 'Huamán', nombres: 'Juan', nombreCompleto: 'Juan Quispe Huamán', fechaNacimiento: '1990-05-15', sexo: 'Masculino', telefono: '999888000', aseguradora: 'SIS' },
-  { id: '2', tipoDocumento: 'DNI', nroDocumento: '22222222', apellidoPaterno: 'Mamani', apellidoMaterno: 'Condori', nombres: 'Rosa', nombreCompleto: 'Rosa Mamani Condori', fechaNacimiento: '1985-08-22', sexo: 'Femenino', telefono: '999888001', aseguradora: 'EsSalud' },
-  { id: '3', tipoDocumento: 'DNI', nroDocumento: '33333333', apellidoPaterno: 'García', apellidoMaterno: 'Pérez', nombres: 'Pedro', nombreCompleto: 'Pedro García Pérez', fechaNacimiento: '2000-01-10', sexo: 'Masculino', telefono: '999888002', aseguradora: 'Particular' },
-];
-
-export interface Paciente {
+/** Fila de la tabla de pacientes (GET /api/pacientes/all). */
+export interface PacienteResumen {
   id: string;
   tipoDocumento: string;
   nroDocumento: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
   nombres: string;
-  // combined field for UI convenience (generated in listPacientesApi)
-  nombreCompleto?: string;
-  fechaNacimiento: string; // YYYY-MM-DD
-  sexo: 'Masculino' | 'Femenino';
+  fechaNacimiento: string;   // ISO yyyy-MM-dd
+  telefono: string;
+  nroHistoria: string;
+  aseguradora: string;
+  consentimiento: string;    // "Firmado" | "Pendiente"
+  createdAt: string;
+}
+
+/** Detalle completo del paciente (GET /api/pacientes/{id}). */
+export interface Paciente extends PacienteResumen {
+  sexo: string;
+  email?: string | null;
+  direccion?: string | null;
+  alergias?: string | null;
+  updatedAt: string;
+}
+
+/** Cuerpo para crear/actualizar un paciente. */
+export interface PacienteInput {
+  tipoDocumento: string;
+  nroDocumento: string;
+  apellidoPaterno: string;
+  apellidoMaterno: string;
+  nombres: string;
+  fechaNacimiento: string;   // yyyy-MM-dd
+  sexo: string;
   telefono: string;
   email?: string;
   direccion?: string;
-  aseguradora: 'SIS' | 'EsSalud' | 'EPS' | 'Particular';
-  nroHistoria?: string;
+  aseguradora: string;
   alergias?: string;
-  consentimiento?: string;
-  hasConsent?: boolean;
-  createdAt?: string;
 }
 
-export interface Medico {
-  id: number;
-  dni: string;
-  nombre: string;
-  apellidos: string;
-  email: string;
-  telefono: string;
-  rol: string;
-  especialidad?: string;
+/** Item de la cola de espera (GET /api/cola/triaje). */
+export interface ColaItem {
+  id: string;
+  pacienteId: string;
+  pacienteNombre: string;
+  pacienteDni: string;
+  ticket: string;
+  horaLlegada: string;
+  medicoNombre?: string | null;
+  especialidad?: string | null;
+  motivo?: string | null;
   estado: string;
+  citaId?: string | null;
+  fecha: string;
 }
 
-/** Lists patients from the backend. Filters by search query `q`. */
-export async function listPacientesApi(q?: string): Promise<Paciente[]> {
-  try {
-    const query = q ? `?q=${encodeURIComponent(q)}` : '';
-    const res = await authFetch(`/api/pacientes/all${query}`);
-    if (!res.ok) throw new Error('API error');
-    const body = await res.json();
-    
-    // The backend paginates: Page<PacienteResumenResponse>
-    const content = body.data?.content || [];
-    return content.map((p: any) => {
-      const stored = PACIENTES_STORE.get(p.id);
-      return {
-        id: p.id,
-        tipoDocumento: p.tipoDocumento,
-        nroDocumento: p.nroDocumento,
-        nombres: p.nombres,
-        apellidoPaterno: p.apellidoPaterno,
-        apellidoMaterno: p.apellidoMaterno,
-        // combined field for UI convenience
-        nombreCompleto: `${p.nombres} ${p.apellidoPaterno} ${p.apellidoMaterno}`,
-        fechaNacimiento: p.fechaNacimiento || stored?.fechaNacimiento || '',
-        sexo: p.sexo || stored?.sexo || '',
-        telefono: p.telefono || stored?.telefono || '',
-        email: p.email || stored?.email,
-        direccion: p.direccion || stored?.direccion,
-        aseguradora: p.aseguradora,
-        nroHistoria: p.nroHistoria,
-        alergias: p.alergias || stored?.alergias,
-        consentimiento: p.consentimiento,
-        hasConsent: p.consentimiento === 'Aceptado' || !!p.consentimiento
-      };
-    });
-  } catch {
-    if (!q) return MOCK_PACIENTES;
-    const lower = q.toLowerCase();
-    return MOCK_PACIENTES.filter(p =>
-      p.nombres.toLowerCase().includes(lower) ||
-      p.nroDocumento.includes(q) ||
-      p.apellidoPaterno.toLowerCase().includes(lower)
-    );
-  }
+// El backend envuelve todo en { data, message, timestamp }.
+interface ApiResponse<T> { data: T; message: string; timestamp: string; }
+interface Page<T> { content: T[]; totalElements: number; totalPages: number; number: number; }
+
+// ===================== PACIENTES =====================
+
+/** Lista pacientes (paginado). `q` filtra por documento o nombre. */
+export async function listarPacientes(q = '', size = 100): Promise<PacienteResumen[]> {
+  const params = new URLSearchParams({ page: '0', size: String(size) });
+  if (q) params.set('q', q);
+  const res = await authFetch(`/api/pacientes/all?${params}`);
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron cargar los pacientes'));
+  const json = (await res.json()) as ApiResponse<Page<PacienteResumen>>;
+  return json.data?.content ?? [];
 }
 
-/** Creates a new patient in the backend. */
-export async function createPacienteApi(data: any): Promise<Paciente> {
+/** Obtiene el detalle de un paciente. */
+export async function obtenerPaciente(id: string): Promise<Paciente> {
+  const res = await authFetch(`/api/pacientes/${id}`);
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo cargar el paciente'));
+  return ((await res.json()) as ApiResponse<Paciente>).data;
+}
+
+/** Registra un nuevo paciente. */
+export async function crearPaciente(input: PacienteInput): Promise<Paciente> {
   const res = await authFetch('/api/pacientes/crear', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(input),
   });
   if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo registrar el paciente'));
-  const body = await res.json();
-  const paciente = body.data as Paciente;
-  // Store full details (incl. fechaNacimiento / telefono) for listPacientesApi merge
-  PACIENTES_STORE.set(paciente.id, paciente);
-  return paciente;
+  return ((await res.json()) as ApiResponse<Paciente>).data;
 }
 
-/** Lists active doctors in the system via public endpoint. */
-export async function listMedicosApi(): Promise<Medico[]> {
-  try {
-    const res = await authFetch('/api/public/medicos/all');
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    return (data as any[]).map((u: any) => ({
-      id: Number(u.id),
-      dni: u.dni,
-      nombre: u.nombre,
-      apellidos: u.apellidos,
-      email: u.email,
-      telefono: u.telefono,
-      rol: u.rol,
-      especialidad: u.especialidad,
-      estado: u.estado,
-    }));
-  } catch {
-    return MOCK_MEDICOS;
-  }
+/** Actualiza los datos de un paciente. */
+export async function actualizarPaciente(id: string, input: PacienteInput): Promise<Paciente> {
+  const res = await authFetch(`/api/pacientes/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo actualizar el paciente'));
+  return ((await res.json()) as ApiResponse<Paciente>).data;
+}
+
+// ===================== COLA =====================
+
+/** Cola de espera para triaje (por defecto la del día de hoy). */
+export async function obtenerColaTriaje(fecha?: string): Promise<ColaItem[]> {
+  const query = fecha ? `?fecha=${fecha}` : '';
+  const res = await authFetch(`/api/cola/triaje${query}`);
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo cargar la cola'));
+  return ((await res.json()) as ApiResponse<ColaItem[]>).data ?? [];
+}
+
+/** Cambia el estado de un elemento de la cola (EN_ESPERA, EN_TRIAJE, ...). */
+export async function actualizarEstadoCola(id: string, estado: string): Promise<void> {
+  const res = await authFetch(`/api/cola/${id}/estado?estado=${encodeURIComponent(estado)}`, {
+    method: 'PUT',
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo actualizar el estado'));
+}
+
+// ===================== HELPERS =====================
+
+/** Nombre completo "Nombres Apellido Apellido". */
+export function nombreCompleto(p: { nombres: string; apellidoPaterno: string; apellidoMaterno: string }): string {
+  return `${p.nombres} ${p.apellidoPaterno} ${p.apellidoMaterno}`.trim();
+}
+
+/** Convierte una fecha ISO (yyyy-MM-dd) a dd/MM/yyyy para mostrar. */
+export function fechaCorta(iso: string): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return d && m && y ? `${d}/${m}/${y}` : iso;
 }

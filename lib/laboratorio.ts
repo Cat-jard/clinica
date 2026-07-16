@@ -1,3 +1,6 @@
+// Integración con laboratorio-service vía API Gateway (:8080 → /api/laboratorio/**).
+import { authFetch, errorMensaje } from '@/lib/auth';
+
 // ===================== TIPOS =====================
 
 export type EstadoOrden = 'Pendiente' | 'Muestra Registrada' | 'En Proceso' | 'Resultados Pendientes' | 'Validado' | 'Rechazado';
@@ -335,4 +338,54 @@ export const MOCK_AUDITORIA_LAB: EntradaAuditoriaLab[] = [
 
 export function nombrePacienteCompleto(p: PacienteLab): string {
   return `${p.nombre} ${p.apellidos}`;
+}
+
+// ===================== API (laboratorio-service) =====================
+// El endpoint devuelve el arreglo de órdenes directamente (sin envoltura ApiResponse).
+
+/** Lista las órdenes de laboratorio (cola de trabajo). */
+export async function listarOrdenesLab(): Promise<OrdenLab[]> {
+  const res = await authFetch('/api/laboratorio/ordenes');
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron cargar las órdenes'));
+  return (await res.json()) as OrdenLab[];
+}
+
+/** Registra la muestra de una orden (pasa a "Muestra Registrada"). */
+export async function registrarMuestraLab(
+  id: string,
+  payload: { origenMuestra: string; condicion: string; observaciones?: string },
+): Promise<OrdenLab> {
+  const res = await authFetch(`/api/laboratorio/ordenes/${id}/muestra`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo registrar la muestra'));
+  return (await res.json()) as OrdenLab;
+}
+
+/** Ingresa los resultados de los exámenes de una orden. */
+export async function ingresarResultadosLab(id: string, resultados: ValorResultado[]): Promise<OrdenLab> {
+  const body = {
+    resultados: resultados.map((r) => ({
+      examenId: r.examenId,
+      resultado: r.resultado,
+      unidad: r.unidad,
+      valorRef: r.valorRef,
+      critico: r.critico,
+      observaciones: r.observaciones ?? null,
+    })),
+  };
+  const res = await authFetch(`/api/laboratorio/ordenes/${id}/resultados`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron ingresar los resultados'));
+  return (await res.json()) as OrdenLab;
+}
+
+/** Valida la orden (pasa a "Validado" y se envía a la Historia Clínica). */
+export async function validarOrdenLab(id: string): Promise<OrdenLab> {
+  const res = await authFetch(`/api/laboratorio/ordenes/${id}/validar`, { method: 'PATCH' });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo validar la orden'));
+  return (await res.json()) as OrdenLab;
 }

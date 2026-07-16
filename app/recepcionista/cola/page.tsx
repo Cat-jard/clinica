@@ -1,22 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ClipboardCheck, Clock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
-import { getColaTriajeApi } from '@/lib/triaje';
+import { obtenerColaTriaje, actualizarEstadoCola, type ColaItem } from '@/lib/recepcion';
 
 type Estado = 'En Espera' | 'En Atención' | 'Completado';
-
-interface Patient {
-  id: string;
-  name: string;
-  dni: string;
-  arrivalTime: string;
-  doctor: string;
-  specialty: string;
-  status: Estado;
-  priority: 'Normal' | 'Urgente';
-}
 
 const STATUS_STYLE: Record<Estado, string> = {
   'En Espera':   'bg-yellow-50 text-yellow-600 border-yellow-100',
@@ -30,54 +19,56 @@ const STATUS_ICON: Record<Estado, React.ReactNode> = {
   'Completado':  <CheckCircle2 size={12} />,
 };
 
-export default function ColaPage() {
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { success } = useToast();
+/** Traduce el estado del backend (EN_ESPERA, EN_ATENCION, ATENDIDO…) al rótulo de la UI. */
+function displayEstado(e: string): Estado {
+  const u = (e || '').toUpperCase();
+  if (u.includes('ESPERA')) return 'En Espera';
+  if (u.includes('ATENC') || u.includes('TRIAJE') || u.includes('PROCESO')) return 'En Atención';
+  return 'Completado';
+}
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        const cola = await getColaTriajeApi(today);
-        setPatients(cola.map((c, i) => ({
-          id: c.id,
-          name: c.pacienteNombre,
-          dni: '',
-          arrivalTime: c.horaLlegada,
-          doctor: c.medicoNombre || '—',
-          specialty: c.especialidad || '—',
-          status: 'En Espera' as Estado,
-          priority: 'Normal' as 'Normal' | 'Urgente',
-        })));
-      } catch (err) {
-        console.error('Error loading queue:', err);
-      } finally {
-        setLoading(false);
-      }
+/** Siguiente estado del backend al hacer "avanzar", o null si ya está completado. */
+function nextEstado(e: string): string | null {
+  const d = displayEstado(e);
+  if (d === 'En Espera') return 'EN_ATENCION';
+  if (d === 'En Atención') return 'ATENDIDO';
+  return null;
+}
+
+export default function ColaPage() {
+  const [items, setItems] = useState<ColaItem[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+  const { success, error: toastError } = useToast();
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError('');
+    try {
+      setItems(await obtenerColaTriaje());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar la cola');
+    } finally {
+      setCargando(false);
     }
-    load();
   }, []);
 
-  const enEspera   = patients.filter((p) => p.status === 'En Espera');
-  const enAtencion = patients.filter((p) => p.status === 'En Atención');
-  const completado = patients.filter((p) => p.status === 'Completado');
+  useEffect(() => { cargar(); }, [cargar]);
 
-  function advance(id: string) {
-    setPatients((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        if (p.status === 'En Espera') {
-          success(`${p.name} pasó a "En Atención".`);
-          return { ...p, status: 'En Atención' };
-        }
-        if (p.status === 'En Atención') {
-          success(`${p.name} marcado como "Completado".`);
-          return { ...p, status: 'Completado' };
-        }
-        return p;
-      })
-    );
+  const enEspera   = items.filter((p) => displayEstado(p.estado) === 'En Espera');
+  const enAtencion = items.filter((p) => displayEstado(p.estado) === 'En Atención');
+  const completado = items.filter((p) => displayEstado(p.estado) === 'Completado');
+
+  async function advance(item: ColaItem) {
+    const siguiente = nextEstado(item.estado);
+    if (!siguiente) return;
+    try {
+      await actualizarEstadoCola(item.id, siguiente);
+      success(`${item.pacienteNombre} pasó a "${displayEstado(siguiente)}".`);
+      await cargar();
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : 'No se pudo actualizar el estado.');
+    }
   }
 
   return (
@@ -87,12 +78,6 @@ export default function ColaPage() {
         <h1 className="text-2xl font-bold text-gray-900">Cola de Espera</h1>
         <p className="text-sm text-gray-400">Gestión en tiempo real de la sala de espera</p>
       </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 size={24} className="animate-spin text-gray-400" />
-        </div>
-      ) : null}
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
@@ -112,57 +97,63 @@ export default function ColaPage() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-800">Pacientes en sala</h2>
-          <span className="text-xs text-gray-400">{patients.length} total</span>
+          <span className="text-xs text-gray-400">{items.length} total</span>
         </div>
+        {error && (
+          <div className="flex items-center gap-2 px-5 py-3 bg-red-50 border-b border-red-100 text-sm text-red-600">
+            <AlertCircle size={15} /> {error}
+            <button onClick={cargar} className="ml-auto text-xs font-medium underline">Reintentar</button>
+          </div>
+        )}
         <table className="w-full text-sm">
           <thead className="bg-gray-50/50">
             <tr>
-              {['#', 'Paciente', 'DNI', 'Llegó', 'Médico', 'Especialidad', 'Estado', 'Acción'].map((h) => (
+              {['#', 'Ticket', 'Paciente', 'DNI', 'Llegó', 'Médico', 'Especialidad', 'Estado', 'Acción'].map((h) => (
                 <th key={h} className="text-left px-5 py-3 text-xs text-gray-400 font-medium">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {!loading && patients.length === 0 && (
-              <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400">No hay pacientes en la cola de espera.</td></tr>
-            )}
-            {patients.map((p, i) => (
-              <tr key={p.id} className={`transition-colors ${p.status === 'Completado' ? 'opacity-50' : 'hover:bg-gray-50/50'}`}>
-                <td className="px-5 py-3 text-xs text-gray-400 font-mono">{i + 1}</td>
-                <td className="px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-800">{p.name}</span>
-                    {p.priority === 'Urgente' && (
-                      <span className="text-[10px] font-bold text-red-500 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-full">
-                        URGENTE
-                      </span>
+            {items.map((p, i) => {
+              const estado = displayEstado(p.estado);
+              return (
+                <tr key={p.id} className={`transition-colors ${estado === 'Completado' ? 'opacity-50' : 'hover:bg-gray-50/50'}`}>
+                  <td className="px-5 py-3 text-xs text-gray-400 font-mono">{i + 1}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-gray-500">{p.ticket}</td>
+                  <td className="px-5 py-3 font-medium text-gray-800">{p.pacienteNombre}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-gray-400">{p.pacienteDni}</td>
+                  <td className="px-5 py-3 text-gray-500">{p.horaLlegada}</td>
+                  <td className="px-5 py-3 text-gray-500 text-xs">{p.medicoNombre ?? '—'}</td>
+                  <td className="px-5 py-3 text-gray-500 text-xs">{p.especialidad ?? '—'}</td>
+                  <td className="px-5 py-3">
+                    <span className={`flex items-center gap-1 w-fit px-2.5 py-1 rounded-full border text-xs font-semibold ${STATUS_STYLE[estado]}`}>
+                      {STATUS_ICON[estado]} {estado}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    {estado !== 'Completado' && (
+                      <button
+                        onClick={() => advance(p)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors"
+                      >
+                        <ClipboardCheck size={11} />
+                        {estado === 'En Espera' ? 'Llamar' : 'Completar'}
+                      </button>
                     )}
-                  </div>
-                </td>
-                <td className="px-5 py-3 font-mono text-xs text-gray-400">{p.dni}</td>
-                <td className="px-5 py-3 text-gray-500">{p.arrivalTime}</td>
-                <td className="px-5 py-3 text-gray-500 text-xs">{p.doctor}</td>
-                <td className="px-5 py-3 text-gray-500 text-xs">{p.specialty}</td>
-                <td className="px-5 py-3">
-                  <span className={`flex items-center gap-1 w-fit px-2.5 py-1 rounded-full border text-xs font-semibold ${STATUS_STYLE[p.status]}`}>
-                    {STATUS_ICON[p.status]} {p.status}
-                  </span>
-                </td>
-                <td className="px-5 py-3">
-                  {p.status !== 'Completado' && (
-                    <button
-                      onClick={() => advance(p.id)}
-                      className="flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors"
-                    >
-                      <ClipboardCheck size={11} />
-                      {p.status === 'En Espera' ? 'Llamar' : 'Completar'}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        {cargando && (
+          <div className="py-12 flex items-center justify-center gap-2 text-sm text-gray-400">
+            <Loader2 size={16} className="animate-spin" /> Cargando cola…
+          </div>
+        )}
+        {!cargando && !error && items.length === 0 && (
+          <div className="py-12 text-center text-sm text-gray-400">No hay pacientes en la cola de hoy.</div>
+        )}
       </div>
     </div>
   );
