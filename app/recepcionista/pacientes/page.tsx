@@ -1,30 +1,41 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, UserPlus, Filter } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Search, UserPlus, Filter, Loader2, AlertCircle } from 'lucide-react';
 import NewPatientModal from '@/components/modals/NewPatientModal';
 import CoverageModal from '@/components/modals/CoverageModal';
-
-const PATIENTS = [
-  { dni: '12345678', name: 'Juan Pérez García',    dob: '12/03/1985', phone: '987 654 321', hasConsent: true,  insurance: 'EsSalud' },
-  { dni: '23456789', name: 'María López Ruiz',     dob: '25/07/1990', phone: '912 345 678', hasConsent: false, insurance: 'SIS'     },
-  { dni: '34567890', name: 'Carlos Rodríguez',     dob: '08/11/1978', phone: '965 432 198', hasConsent: true,  insurance: 'EPS'     },
-  { dni: '45678901', name: 'Ana Fernández Díaz',   dob: '30/01/1995', phone: '934 567 890', hasConsent: false, insurance: 'Particular' },
-  { dni: '56789012', name: 'Pedro Martínez Vega',  dob: '14/06/1982', phone: '956 789 012', hasConsent: true,  insurance: 'EsSalud' },
-  { dni: '67890123', name: 'Lucía Torres Salas',   dob: '22/09/2000', phone: '945 678 901', hasConsent: true,  insurance: 'SIS'     },
-];
+import {
+  listarPacientes, nombreCompleto, fechaCorta, type PacienteResumen,
+} from '@/lib/recepcion';
 
 type Modal = 'newPatient' | 'coverage' | null;
 
 export default function PacientesPage() {
+  const [pacientes, setPacientes] = useState<PacienteResumen[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState<Modal>(null);
-  const [selected, setSelected] = useState<(typeof PATIENTS)[0] | null>(null);
+  const [selected, setSelected] = useState<PacienteResumen | null>(null);
 
-  const filtered = PATIENTS.filter(
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError('');
+    try {
+      setPacientes(await listarPacientes());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar pacientes');
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const filtered = pacientes.filter(
     (p) =>
-      p.dni.includes(query) ||
-      p.name.toLowerCase().includes(query.toLowerCase()),
+      p.nroDocumento.includes(query) ||
+      nombreCompleto(p).toLowerCase().includes(query.toLowerCase()),
   );
 
   return (
@@ -63,6 +74,12 @@ export default function PacientesPage() {
 
         {/* Table */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {error && (
+            <div className="flex items-center gap-2 px-5 py-3 bg-red-50 border-b border-red-100 text-sm text-red-600">
+              <AlertCircle size={15} /> {error}
+              <button onClick={cargar} className="ml-auto text-xs font-medium underline">Reintentar</button>
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead className="border-b border-gray-100 bg-gray-50/50">
               <tr>
@@ -72,19 +89,19 @@ export default function PacientesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map((p, i) => (
-                <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-5 py-3 font-mono text-xs text-gray-500">{p.dni}</td>
-                  <td className="px-5 py-3 font-semibold text-gray-800">{p.name}</td>
-                  <td className="px-5 py-3 text-gray-500">{p.dob}</td>
-                  <td className="px-5 py-3 text-gray-500">{p.phone}</td>
+              {filtered.map((p) => (
+                <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-5 py-3 font-mono text-xs text-gray-500">{p.nroDocumento}</td>
+                  <td className="px-5 py-3 font-semibold text-gray-800">{nombreCompleto(p)}</td>
+                  <td className="px-5 py-3 text-gray-500">{fechaCorta(p.fechaNacimiento)}</td>
+                  <td className="px-5 py-3 text-gray-500">{p.telefono}</td>
                   <td className="px-5 py-3">
                     <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
-                      {p.insurance}
+                      {p.aseguradora}
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    {p.hasConsent
+                    {p.consentimiento === 'Firmado'
                       ? <span className="text-xs font-semibold text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">Firmado</span>
                       : <span className="text-xs font-semibold text-red-500 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">Pendiente</span>
                     }
@@ -101,17 +118,24 @@ export default function PacientesPage() {
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && (
+          {cargando && (
+            <div className="py-12 flex items-center justify-center gap-2 text-sm text-gray-400">
+              <Loader2 size={16} className="animate-spin" /> Cargando pacientes…
+            </div>
+          )}
+          {!cargando && !error && filtered.length === 0 && (
             <div className="py-12 text-center text-sm text-gray-400">
-              No se encontraron pacientes para "{query}".
+              {query ? `No se encontraron pacientes para "${query}".` : 'No hay pacientes registrados.'}
             </div>
           )}
         </div>
       </div>
 
-      {modal === 'newPatient' && <NewPatientModal onClose={() => setModal(null)} />}
+      {modal === 'newPatient' && (
+        <NewPatientModal onClose={() => setModal(null)} onCreated={cargar} />
+      )}
       {modal === 'coverage' && selected && (
-        <CoverageModal patientName={selected.name} onClose={() => setModal(null)} />
+        <CoverageModal patientName={nombreCompleto(selected)} onClose={() => setModal(null)} />
       )}
     </>
   );

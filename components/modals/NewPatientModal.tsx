@@ -5,6 +5,7 @@ import ModalBase from './ModalBase';
 import ConsentModal from './ConsentModal';
 import { useToast } from '@/context/ToastContext';
 import { calcAge } from '@/lib/format';
+import { crearPaciente } from '@/lib/recepcion';
 
 interface FormData {
   tipoDocumento: string;
@@ -17,11 +18,13 @@ interface FormData {
   telefono: string;
   email: string;
   direccion: string;
+  aseguradora: string;
 }
 
 const INITIAL: FormData = {
   tipoDocumento: 'DNI', dni: '', nombres: '', apellidoPaterno: '',
-  apellidoMaterno: '', fechaNacimiento: '', sexo: '', telefono: '', email: '', direccion: '',
+  apellidoMaterno: '', fechaNacimiento: '', sexo: '', telefono: '', email: '',
+  direccion: '', aseguradora: '',
 };
 
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
@@ -37,12 +40,13 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-interface Props { onClose: () => void }
+interface Props { onClose: () => void; onCreated?: () => void }
 
-export default function NewPatientModal({ onClose }: Props) {
+export default function NewPatientModal({ onClose, onCreated }: Props) {
   const [form, setForm] = useState<FormData>(INITIAL);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [showConsent, setShowConsent] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const { success, error: toastError } = useToast();
 
   const set = (key: keyof FormData) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -62,18 +66,50 @@ export default function NewPatientModal({ onClose }: Props) {
       e.fechaNacimiento = 'La fecha no puede ser futura.';
     if (!form.sexo)                   e.sexo = 'Seleccione una opción.';
     if (!/^\d{9}$/.test(form.telefono)) e.telefono = 'El teléfono debe tener 9 dígitos.';
+    if (!form.aseguradora.trim())       e.aseguradora = 'Seleccione una aseguradora.';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  function handleSave() {
+  /** Persiste el paciente en recepcion-service. Devuelve true si se creó. */
+  async function persistir(): Promise<boolean> {
+    setGuardando(true);
+    try {
+      await crearPaciente({
+        tipoDocumento: form.tipoDocumento,
+        nroDocumento: form.dni,
+        apellidoPaterno: form.apellidoPaterno,
+        apellidoMaterno: form.apellidoMaterno,
+        nombres: form.nombres,
+        fechaNacimiento: form.fechaNacimiento,
+        sexo: form.sexo,
+        telefono: form.telefono,
+        email: form.email || undefined,
+        direccion: form.direccion || undefined,
+        aseguradora: form.aseguradora,
+      });
+      return true;
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : 'No se pudo registrar el paciente.');
+      return false;
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function handleSave() {
     if (!validate()) { toastError('Corrija los errores antes de guardar.'); return; }
+    if (!(await persistir())) return;
     success(`Paciente "${fullName}" registrado correctamente.`);
+    onCreated?.();
     onClose();
   }
 
-  function handleSaveAndConsent() {
+  async function handleSaveAndConsent() {
     if (!validate()) { toastError('Corrija los errores antes de continuar.'); return; }
+    if (!(await persistir())) return;
+    success(`Paciente "${fullName}" registrado correctamente.`);
+    onCreated?.();
     setShowConsent(true);
   }
 
@@ -183,6 +219,20 @@ export default function NewPatientModal({ onClose }: Props) {
               <input type="email" value={form.email} onChange={set('email')}
                 placeholder="correo@gmail.com" aria-label="Correo electrónico" className={inputCls} />
             </Field>
+            <Field label="Aseguradora" required>
+              <select value={form.aseguradora} onChange={set('aseguradora')}
+                aria-label="Aseguradora"
+                className={`${inputCls} ${errors.aseguradora ? 'border-red-400' : ''}`}>
+                <option value="">Seleccione…</option>
+                <option>SIS</option>
+                <option>EsSalud</option>
+                <option>EPS</option>
+                <option>Particular</option>
+                <option>Rímac</option>
+                <option>Pacífico</option>
+              </select>
+              {errors.aseguradora && <p className="text-xs text-red-500 mt-0.5">{errors.aseguradora}</p>}
+            </Field>
             <div className="col-span-2">
               <Field label="Dirección">
                 <input value={form.direccion} onChange={set('direccion')}
@@ -194,16 +244,16 @@ export default function NewPatientModal({ onClose }: Props) {
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button onClick={onClose} disabled={guardando}
+            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={handleSave}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-            Guardar
+          <button onClick={handleSave} disabled={guardando}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50">
+            {guardando ? 'Guardando…' : 'Guardar'}
           </button>
-          <button onClick={handleSaveAndConsent}
-            className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+          <button onClick={handleSaveAndConsent} disabled={guardando}
+            className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
             Guardar y Solicitar Consentimiento
           </button>
         </div>

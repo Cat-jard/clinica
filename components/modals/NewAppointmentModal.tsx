@@ -1,14 +1,11 @@
 'use client';
 
-import { useState, ChangeEvent } from 'react';
+import { useEffect, useState, ChangeEvent } from 'react';
 import ModalBase from './ModalBase';
-
-const SPECIALTIES: Record<string, string[]> = {
-  'Psicología':   ['Dr. Randy Gouse', 'Dr. Alex Pitols'],
-  'Cardiología':  ['Dra. Ana Torres'],
-  'Pediatría':    ['Dr. Luis Díaz'],
-  'Medicina General': ['Dr. Roberto Sánchez'],
-};
+import { useToast } from '@/context/ToastContext';
+import { crearCita } from '@/lib/citas';
+import { listarPacientes, nombreCompleto, type PacienteResumen } from '@/lib/recepcion';
+import { listarMedicos, nombreMedico, type Medico } from '@/lib/medicos';
 
 const HOURS = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30',
                '12:00','12:30','14:00','14:30','15:00','15:30','16:00','16:30'];
@@ -16,9 +13,8 @@ const HOURS = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30',
 const TIPOS = ['Consulta Externa', 'Teleconsulta', 'Control', 'Emergencia', 'Procedimiento'];
 
 interface FormData {
-  paciente: string;
-  especialidad: string;
-  medico: string;
+  pacienteId: string;
+  medicoId: string;
   fecha: string;
   hora: string;
   duracion: string;
@@ -27,7 +23,7 @@ interface FormData {
 }
 
 const INITIAL: FormData = {
-  paciente: '', especialidad: '', medico: '', fecha: '',
+  pacienteId: '', medicoId: '', fecha: '',
   hora: '', duracion: '30', tipo: 'Consulta Externa', observaciones: '',
 };
 
@@ -45,39 +41,76 @@ function Field({ label, required, children }: FieldProps) {
   );
 }
 
-interface Props { onClose: () => void }
+/** "HH:MM" + minutos → "HH:MM:SS". */
+function sumarMinutos(hhmm: string, mins: number): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = h * 60 + m + mins;
+  const hh = String(Math.floor(total / 60) % 24).padStart(2, '0');
+  const mm = String(total % 60).padStart(2, '0');
+  return `${hh}:${mm}:00`;
+}
 
-export default function NewAppointmentModal({ onClose }: Props) {
+interface Props { onClose: () => void; onCreated?: () => void }
+
+export default function NewAppointmentModal({ onClose, onCreated }: Props) {
   const [form, setForm] = useState<FormData>(INITIAL);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [pacientes, setPacientes] = useState<PacienteResumen[]>([]);
+  const [medicos, setMedicos] = useState<Medico[]>([]);
+  const [guardando, setGuardando] = useState(false);
+  const { success, error: toastError } = useToast();
+
+  useEffect(() => {
+    listarPacientes().then(setPacientes).catch(() => toastError('No se pudieron cargar los pacientes.'));
+    listarMedicos().then(setMedicos).catch(() => toastError('No se pudieron cargar los médicos.'));
+  }, [toastError]);
 
   const set = (key: keyof FormData) =>
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-      setForm((f) => {
-        const next = { ...f, [key]: e.target.value };
-        if (key === 'especialidad') next.medico = '';
-        return next;
-      });
+      setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const doctors = form.especialidad ? (SPECIALTIES[form.especialidad] ?? []) : [];
   const today = new Date().toISOString().split('T')[0];
 
   function validate() {
     const e: Partial<Record<keyof FormData, string>> = {};
-    if (!form.paciente.trim()) e.paciente = 'Campo obligatorio.';
-    if (!form.especialidad)    e.especialidad = 'Seleccione una especialidad.';
-    if (!form.medico)          e.medico = 'Seleccione un médico.';
-    if (!form.fecha)           e.fecha = 'Campo obligatorio.';
+    if (!form.pacienteId) e.pacienteId = 'Seleccione un paciente.';
+    if (!form.medicoId)   e.medicoId = 'Seleccione un médico.';
+    if (!form.fecha)      e.fecha = 'Campo obligatorio.';
     else if (form.fecha < today) e.fecha = 'La fecha no puede ser anterior a hoy.';
-    if (!form.hora)            e.hora = 'Seleccione una hora.';
+    if (!form.hora)       e.hora = 'Seleccione una hora.';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validate()) return;
-    alert(`Cita agendada para "${form.paciente}" el ${form.fecha} a las ${form.hora} con ${form.medico}.`);
-    onClose();
+    const paciente = pacientes.find((p) => p.id === form.pacienteId);
+    const medico = medicos.find((m) => m.id === form.medicoId);
+    if (!paciente || !medico) return;
+
+    setGuardando(true);
+    try {
+      await crearCita({
+        pacienteId: paciente.id,
+        medicoId: Number(medico.id),
+        fechaCita: form.fecha,
+        horaInicio: `${form.hora}:00`,
+        horaFin: sumarMinutos(form.hora, Number(form.duracion)),
+        motivo: form.tipo,
+        observaciones: form.observaciones || undefined,
+        tipoSeguro: paciente.aseguradora,
+        numeroHistoria: paciente.nroHistoria,
+        pacienteNombre: nombreCompleto(paciente),
+        medicoNombre: nombreMedico(medico),
+      });
+      success(`Cita agendada para "${nombreCompleto(paciente)}" el ${form.fecha} a las ${form.hora}.`);
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : 'No se pudo agendar la cita.');
+    } finally {
+      setGuardando(false);
+    }
   }
 
   return (
@@ -86,32 +119,32 @@ export default function NewAppointmentModal({ onClose }: Props) {
 
         {/* Paciente */}
         <Field label="Paciente" required>
-          <input value={form.paciente} onChange={set('paciente')}
-            placeholder="Buscar por nombre o DNI…"
-            className={`${inputCls} ${errors.paciente ? 'border-red-400' : ''}`} />
-          {errors.paciente && <p className="text-xs text-red-500 mt-0.5">{errors.paciente}</p>}
+          <select value={form.pacienteId} onChange={set('pacienteId')}
+            className={`${inputCls} ${errors.pacienteId ? 'border-red-400' : ''}`}>
+            <option value="">Seleccionar paciente…</option>
+            {pacientes.map((p) => (
+              <option key={p.id} value={p.id}>{nombreCompleto(p)} — {p.nroDocumento}</option>
+            ))}
+          </select>
+          {errors.pacienteId && <p className="text-xs text-red-500 mt-0.5">{errors.pacienteId}</p>}
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          {/* Especialidad */}
-          <Field label="Especialidad" required>
-            <select value={form.especialidad} onChange={set('especialidad')}
-              className={`${inputCls} ${errors.especialidad ? 'border-red-400' : ''}`}>
-              <option value="">Seleccionar…</option>
-              {Object.keys(SPECIALTIES).map((s) => <option key={s}>{s}</option>)}
-            </select>
-            {errors.especialidad && <p className="text-xs text-red-500 mt-0.5">{errors.especialidad}</p>}
-          </Field>
-
           {/* Médico */}
-          <Field label="Médico" required>
-            <select value={form.medico} onChange={set('medico')} disabled={!form.especialidad}
-              className={`${inputCls} ${errors.medico ? 'border-red-400' : ''} disabled:bg-gray-50 disabled:text-gray-400`}>
-              <option value="">Seleccionar…</option>
-              {doctors.map((d) => <option key={d}>{d}</option>)}
-            </select>
-            {errors.medico && <p className="text-xs text-red-500 mt-0.5">{errors.medico}</p>}
-          </Field>
+          <div className="col-span-2">
+            <Field label="Médico" required>
+              <select value={form.medicoId} onChange={set('medicoId')}
+                className={`${inputCls} ${errors.medicoId ? 'border-red-400' : ''}`}>
+                <option value="">Seleccionar médico…</option>
+                {medicos.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {nombreMedico(m)}{m.especialidad ? ` — ${m.especialidad}` : ''}
+                  </option>
+                ))}
+              </select>
+              {errors.medicoId && <p className="text-xs text-red-500 mt-0.5">{errors.medicoId}</p>}
+            </Field>
+          </div>
 
           {/* Fecha */}
           <Field label="Fecha" required>
@@ -156,13 +189,13 @@ export default function NewAppointmentModal({ onClose }: Props) {
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button onClick={onClose} disabled={guardando}
+            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={handleSubmit}
-            className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-            Agendar Cita
+          <button onClick={handleSubmit} disabled={guardando}
+            className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+            {guardando ? 'Agendando…' : 'Agendar Cita'}
           </button>
         </div>
       </div>

@@ -1,3 +1,6 @@
+// Integración con radiologia-service vía API Gateway (:8080 → /api/radiologia/**).
+import { authFetch, errorMensaje } from '@/lib/auth';
+
 // ===================== TIPOS =====================
 
 export type EstadoEstudio = 'Pendiente' | 'En Proceso' | 'Borrador' | 'Firmado' | 'Revisado';
@@ -242,4 +245,48 @@ export function formatoEspera(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return `${h}h ${m.toString().padStart(2, '0')}m`;
+}
+
+// ===================== API (radiologia-service) =====================
+// Los endpoints devuelven el estudio (o la lista) directamente, sin envoltura.
+
+/** Lista los estudios de imágenes (cola de lectura). */
+export async function listarEstudios(): Promise<EstudioImagen[]> {
+  const res = await authFetch('/api/radiologia/estudios');
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron cargar los estudios'));
+  return (await res.json()) as EstudioImagen[];
+}
+
+/** Obtiene un estudio por id. */
+export async function obtenerEstudio(id: string): Promise<EstudioImagen> {
+  const res = await authFetch(`/api/radiologia/estudios/${id}`);
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo cargar el estudio'));
+  return (await res.json()) as EstudioImagen;
+}
+
+/** Marca el inicio de la lectura (Pendiente → En Proceso). */
+export async function iniciarEstudio(id: string): Promise<EstudioImagen> {
+  const res = await authFetch(`/api/radiologia/estudios/${id}/iniciar`, { method: 'PATCH' });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo iniciar la lectura'));
+  return (await res.json()) as EstudioImagen;
+}
+
+/** Guarda el informe como borrador. */
+export async function guardarBorradorEstudio(id: string, informe: InformeRadiologico): Promise<EstudioImagen> {
+  const res = await authFetch(`/api/radiologia/estudios/${id}/borrador`, {
+    method: 'PATCH',
+    body: JSON.stringify(informe),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo guardar el borrador'));
+  return (await res.json()) as EstudioImagen;
+}
+
+/** Firma el informe (Firmado). `urgente` dispara la alerta al médico tratante. */
+export async function firmarEstudio(id: string, informe: InformeRadiologico, urgente: boolean): Promise<EstudioImagen> {
+  const res = await authFetch(`/api/radiologia/estudios/${id}/firmar`, {
+    method: 'PATCH',
+    body: JSON.stringify({ informe, urgente }),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo firmar el informe'));
+  return (await res.json()) as EstudioImagen;
 }

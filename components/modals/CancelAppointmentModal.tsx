@@ -23,22 +23,28 @@ interface Appointment {
 interface Props {
   appointment: Appointment;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (motivo: string) => Promise<void> | void;
 }
 
 export default function CancelAppointmentModal({ appointment, onClose, onConfirm }: Props) {
   const [motivo, setMotivo] = useState('');
   const [detalle, setDetalle] = useState('');
-  const { success, error } = useToast();
+  const [procesando, setProcesando] = useState(false);
+  const { error } = useToast();
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!motivo) { error('Debe seleccionar un motivo de cancelación (requerido por trazabilidad).'); return; }
     if (motivo === 'Otro motivo' && !detalle.trim()) {
       error('Debe describir el motivo de cancelación.');
       return;
     }
-    success(`Cita de ${appointment.patient} cancelada. Motivo registrado.`);
-    onConfirm();
+    const motivoFinal = motivo === 'Otro motivo' ? detalle.trim() : motivo;
+    setProcesando(true);
+    try {
+      await onConfirm(motivoFinal);
+    } finally {
+      setProcesando(false);
+    }
   }
 
   return (
@@ -97,15 +103,17 @@ export default function CancelAppointmentModal({ appointment, onClose, onConfirm
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            disabled={procesando}
+            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Volver
           </button>
           <button
             onClick={handleConfirm}
-            className="px-5 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
+            disabled={procesando}
+            className="px-5 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
           >
-            Confirmar Cancelación
+            {procesando ? 'Cancelando…' : 'Confirmar Cancelación'}
           </button>
         </div>
       </div>

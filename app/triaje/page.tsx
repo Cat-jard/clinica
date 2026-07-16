@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import KpiCards          from '@/components/triaje/KpiCards';
 import ColaTriaje        from '@/components/triaje/ColaTriaje';
 import ClasificadosTable from '@/components/triaje/ClasificadosTable';
@@ -9,24 +10,25 @@ import HourlyArrivalsChart from '@/components/triaje/charts/HourlyArrivalsChart'
 import TriageTimeChart   from '@/components/triaje/charts/TriageTimeChart';
 import SpO2Gauge         from '@/components/triaje/charts/SpO2Gauge';
 import TopMotivoChart    from '@/components/triaje/charts/TopMotivoChart';
-import { PacienteEspera, PacienteClasificado } from '@/lib/vitals';
-
-const MOCK_COLA: PacienteEspera[] = [
-  { id: '1', ticket: 'T-001', nombre: 'Carlos Rodríguez',   dni: '34567890', fechaNac: '1978-11-08', horaLlegada: '08:05', motivo: 'Dolor abdominal agudo'     },
-  { id: '2', ticket: 'T-002', nombre: 'Ana Fernández Díaz', dni: '45678901', fechaNac: '1995-01-30', horaLlegada: '08:42', motivo: 'Dificultad para respirar'  },
-  { id: '3', ticket: 'T-003', nombre: 'Pedro Martínez',     dni: '56789012', fechaNac: '1982-06-14', horaLlegada: '09:10', motivo: 'Cefalea intensa'            },
-];
-
-const now = new Date();
-const MOCK_CLASIFICADOS: PacienteClasificado[] = [
-  { id: '4', ticket: 'T-004', nombre: 'Lucía Torres Salas', prioridad: 'II-NARANJA',   destino: 'Emergencias',             horaClasificado: new Date(now.getTime() - 8  * 60000), estado: 'Esperando' },
-  { id: '5', ticket: 'T-005', nombre: 'Roberto Saenz',      prioridad: 'III-AMARILLO', destino: 'Consultorio prioritario', horaClasificado: new Date(now.getTime() - 35 * 60000), estado: 'Esperando' },
-  { id: '6', ticket: 'T-006', nombre: 'Carmen Villanueva',  prioridad: 'IV-VERDE',     destino: 'Consultorio normal',      horaClasificado: new Date(now.getTime() - 90 * 60000), estado: 'Esperando' },
-];
+import {
+  type PacienteEspera, type PacienteClasificado,
+  obtenerColaTriajeAPI, colaAPacienteEspera, listarClasificados,
+} from '@/lib/vitals';
 
 export default function TriajeDashboard() {
-  const [cola]         = useState<PacienteEspera[]>(MOCK_COLA);
-  const [clasificados] = useState<PacienteClasificado[]>(MOCK_CLASIFICADOS);
+  const [cola, setCola]                 = useState<PacienteEspera[]>([]);
+  const [clasificados, setClasificados] = useState<PacienteClasificado[]>([]);
+  const [cargando, setCargando]         = useState(true);
+  const [error, setError]               = useState('');
+
+  useEffect(() => {
+    let vivo = true;
+    Promise.all([obtenerColaTriajeAPI(), listarClasificados()])
+      .then(([c, cl]) => { if (vivo) { setCola(c.map(colaAPacienteEspera)); setClasificados(cl); } })
+      .catch((e) => { if (vivo) setError(e instanceof Error ? e.message : 'Error al cargar triaje'); })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, []);
 
   const rojo    = clasificados.filter((p) => p.prioridad === 'I-ROJO').length;
   const naranja = clasificados.filter((p) => p.prioridad === 'II-NARANJA').length;
@@ -37,6 +39,17 @@ export default function TriajeDashboard() {
         <h1 className="text-2xl font-bold text-gray-900">Panel de Triaje</h1>
         <p className="text-sm text-gray-400">Gestión de prioridades — Enfermería</p>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 px-5 py-3 bg-red-50 border border-red-100 rounded-2xl text-sm text-red-600">
+          <AlertCircle size={15} /> {error}
+        </div>
+      )}
+      {cargando && (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Loader2 size={14} className="animate-spin" /> Cargando datos de triaje…
+        </div>
+      )}
 
       <KpiCards enEspera={cola.length} rojo={rojo} naranja={naranja} tiempoPromedio={6} />
 

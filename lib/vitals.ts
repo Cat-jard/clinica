@@ -1,4 +1,6 @@
 // lib/vitals.ts
+// Integración con triaje-service vía API Gateway (:8080 → /api/triaje/**).
+import { authFetch, errorMensaje } from '@/lib/auth';
 
 export type Prioridad = 'I-ROJO' | 'II-NARANJA' | 'III-AMARILLO' | 'IV-VERDE' | 'V-AZUL';
 export type Destino   = 'Reanimación/UCI' | 'Emergencias' | 'Consultorio prioritario' | 'Consultorio normal' | 'Consulta externa';
@@ -160,4 +162,97 @@ export function isOverTime(prioridad: Prioridad, from: Date): boolean {
   const diffMin = (Date.now() - from.getTime()) / 60000;
   const max     = PRIORIDAD_CONFIG[prioridad].maxMinutes;
   return max === 0 ? diffMin > 2 : diffMin > max;
+}
+
+// ===================== API (triaje-service) =====================
+// Respuestas envueltas en { data, message, timestamp }.
+interface ApiResponse<T> { data: T; message: string; timestamp: string; }
+interface Page<T> { content: T[]; }
+
+/** Item de la cola de triaje (incluye colaId = id, necesario para registrar). */
+export interface ColaTriajeItem {
+  id: string;              // colaId
+  pacienteId: string;
+  pacienteNombre: string;
+  pacienteDni: string;
+  ticket: string;
+  horaLlegada: string;
+  medicoNombre?: string | null;
+  especialidad?: string | null;
+  motivo?: string | null;
+  citaId?: string | null;
+}
+
+/** Cola de pacientes pendientes de triaje. */
+export async function obtenerColaTriajeAPI(): Promise<ColaTriajeItem[]> {
+  const res = await authFetch('/api/triaje/cola');
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo cargar la cola de triaje'));
+  return ((await res.json()) as ApiResponse<ColaTriajeItem[]>).data ?? [];
+}
+
+/** Convierte un item de cola al tipo que usan las tablas del panel. */
+export function colaAPacienteEspera(c: ColaTriajeItem): PacienteEspera {
+  return {
+    id: c.pacienteId,
+    ticket: c.ticket,
+    nombre: c.pacienteNombre,
+    dni: c.pacienteDni,
+    fechaNac: '',
+    horaLlegada: c.horaLlegada,
+    motivo: c.motivo ?? '',
+  };
+}
+
+/** Registros de triaje ya clasificados (para la tabla de clasificados). */
+export async function listarClasificados(): Promise<PacienteClasificado[]> {
+  const res = await authFetch('/api/triaje/registros?page=0&size=50');
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron cargar los clasificados'));
+  const page = ((await res.json()) as ApiResponse<Page<Record<string, unknown>>>).data;
+  return (page?.content ?? []).map((r) => ({
+    id: String(r.pacienteId ?? r.id),
+    ticket: String(r.ticket ?? ''),
+    nombre: String(r.pacienteNombre ?? ''),
+    prioridad: (r.prioridad as Prioridad) ?? 'IV-VERDE',
+    destino: (r.destino as Destino) ?? 'Consultorio normal',
+    horaClasificado: r.timestamp ? new Date(String(r.timestamp)) : new Date(),
+    estado: 'Esperando',
+  }));
+}
+
+/** Pacientes en observación. */
+export async function listarObservaciones(): Promise<PacienteObservacion[]> {
+  const res = await authFetch('/api/triaje/observacion');
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron cargar las observaciones'));
+  const data = ((await res.json()) as ApiResponse<Record<string, unknown>[]>).data ?? [];
+  return data.map((o) => ({
+    id: String(o.id),
+    nombre: String(o.pacienteNombre ?? ''),
+    horaIngreso: o.horaIngreso ? new Date(String(o.horaIngreso)) : new Date(),
+    prioridad: (o.prioridad as Prioridad) ?? 'IV-VERDE',
+    motivo: String(o.motivo ?? ''),
+    kardex: [],
+  }));
+}
+
+/** Cuerpo para registrar un triaje. */
+export interface RegistrarTriajePayload {
+  colaId?: string;
+  pacienteId: string;
+  citaId?: string;
+  enfermeraId: string;
+  signos: SignosVitales;
+  motivoConsulta: string;
+  nivelConciencia: string;
+  dolor: number;
+  prioridad: Prioridad;
+  justificacion: string;
+}
+
+/** Registra el triaje de un paciente (signos + clasificación). */
+export async function registrarTriaje(payload: RegistrarTriajePayload): Promise<void> {
+  const res = await authFetch('/api/triaje/registrar', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo registrar el triaje'));
 }
