@@ -4,6 +4,8 @@ import { useRef, useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import ModalBase from './ModalBase';
 import { useToast } from '@/context/ToastContext';
+import { registrarConsentimiento } from '@/lib/recepcion';
+import { getUsuario } from '@/lib/auth';
 
 const LEGAL_TEXT = `CONSENTIMIENTO INFORMADO PARA EL TRATAMIENTO DE DATOS PERSONALES EN SALUD
 
@@ -35,12 +37,13 @@ Su información médica es estrictamente confidencial. Solo podrá ser compartid
 Normativa aplicable: Ley N°29733, NTS N°139-MINSA/2018/DGAIN, Ley N°30024 (RENHICE).`;
 
 interface Props {
+  pacienteId: string;
   patientName: string;
   onClose: () => void;
   onAccepted: () => void;
 }
 
-export default function ConsentModal({ patientName, onClose, onAccepted }: Props) {
+export default function ConsentModal({ pacienteId, patientName, onClose, onAccepted }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -48,7 +51,6 @@ export default function ConsentModal({ patientName, onClose, onAccepted }: Props
   const [loading, setLoading] = useState(false);
   const { success, error } = useToast();
 
-  // Canvas drawing logic
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -104,15 +106,34 @@ export default function ConsentModal({ patientName, onClose, onAccepted }: Props
     setHasSigned(false);
   }
 
+  function getSignatureBase64(): string {
+    const canvas = canvasRef.current;
+    if (!canvas) return '';
+    return canvas.toDataURL('image/png');
+  }
+
   async function handleAccept() {
     if (!checked) { error('Debe aceptar el consentimiento antes de continuar.'); return; }
     if (!hasSigned) { error('El paciente debe firmar antes de continuar.'); return; }
     setLoading(true);
-    // Simulate API call
-    await new Promise((r) => setTimeout(r, 1500));
-    setLoading(false);
-    success(`Consentimiento de ${patientName} registrado correctamente.`);
-    onAccepted();
+    try {
+      const usuario = getUsuario();
+      await registrarConsentimiento(pacienteId, {
+        tipo: 'TRATAMIENTO_DATOS',
+        textoLegal: LEGAL_TEXT,
+        versionTexto: '1.0',
+        firmaBase64: getSignatureBase64(),
+        aceptado: true,
+        ipOrigen: window.location.hostname || '127.0.0.1',
+        userId: usuario?.id || 'unknown',
+      });
+      success(`Consentimiento de ${patientName} registrado correctamente.`);
+      onAccepted();
+    } catch (err: any) {
+      error(err.message || 'No se pudo registrar el consentimiento.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const canAccept = checked && hasSigned && !loading;

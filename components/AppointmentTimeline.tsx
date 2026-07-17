@@ -1,41 +1,72 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { MoreHorizontal } from 'lucide-react';
+import { listarCitas } from '@/lib/citas';
 
-const data = [
-  { hour: '8am',  citas: 8  },
-  { hour: '9am',  citas: 15 },
-  { hour: '10am', citas: 22 },
-  { hour: '11am', citas: 18 },
-  { hour: '12pm', citas: 12 },
-  { hour: '1pm',  citas: 8  },
-  { hour: '2pm',  citas: 16 },
-  { hour: '3pm',  citas: 20 },
-  { hour: '4pm',  citas: 14 },
-  { hour: '5pm',  citas: 9  },
-];
+const HOURS = ['8am','9am','10am','11am','12pm','1pm','2pm','3pm','4pm','5pm'];
 
-const peakHour = data.reduce((a, b) => (a.citas > b.citas ? a : b));
-
-const HatchBar = (props: any) => {
-  const { x, y, width, height, index } = props;
-  if (!width || !height || height <= 0) return null;
-  const patternId = `apt-hatch-${index}`;
-  return (
-    <g>
-      <defs>
-        <pattern id={patternId} patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(45 0 0)">
-          <rect width="6"  height="10" fill="#93c5fd" />
-          <rect x="6" width="4" height="10" fill="#bfdbfe" />
-        </pattern>
-      </defs>
-      <rect x={x} y={y} width={width} height={height} fill={`url(#${patternId})`} rx={4} />
-    </g>
-  );
-};
+function hourLabel(h: number): string {
+  if (h < 12) return `${h}am`;
+  if (h === 12) return '12pm';
+  return `${h - 12}pm`;
+}
 
 export default function AppointmentTimeline() {
+  const [data, setData] = useState<{ hour: string; citas: number }[]>(
+    HOURS.map((h) => ({ hour: h, citas: 0 }))
+  );
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetch() {
+      try {
+        const today = new Date().toLocaleDateString('en-CA');
+        const citas = await listarCitas(undefined, 200, today, today);
+        const bucket: Record<number, number> = {};
+        for (const c of citas) {
+          const h = parseInt((c.horaInicio || '00').slice(0, 2), 10);
+          bucket[h] = (bucket[h] || 0) + 1;
+        }
+        setData(HOURS.map((h) => {
+          const [raw] = h.split(/(?=am|pm)/);
+          const isPm = h.includes('pm');
+          let num = parseInt(raw, 10);
+          if (isPm && num !== 12) num += 12;
+          if (!isPm && num === 12) num = 0;
+          return { hour: h, citas: bucket[num] || 0 };
+        }));
+      } catch {
+        // fallback silencioso
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetch();
+    const interval = setInterval(fetch, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const peakHour = data.reduce((a, b) => (a.citas > b.citas ? a : b));
+
+  const HatchBar = (props: any) => {
+    const { x, y, width, height, index } = props;
+    if (!width || !height || height <= 0) return null;
+    const patternId = `apt-hatch-${index}`;
+    return (
+      <g>
+        <defs>
+          <pattern id={patternId} patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(45 0 0)">
+            <rect width="6"  height="10" fill="#93c5fd" />
+            <rect x="6" width="4" height="10" fill="#bfdbfe" />
+          </pattern>
+        </defs>
+        <rect x={x} y={y} width={width} height={height} fill={`url(#${patternId})`} rx={4} />
+      </g>
+    );
+  };
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-full">
       <div className="flex justify-between items-start mb-1">
@@ -45,15 +76,14 @@ export default function AppointmentTimeline() {
         </button>
       </div>
       <p className="text-xs text-gray-400 mb-4">
-        Hora pico: <span className="font-semibold text-blue-600">{peakHour.hour}</span> con {peakHour.citas} citas
+        {loading ? 'Cargando…' : `Hora pico: ${peakHour.citas > 0 ? `${peakHour.hour} con ${peakHour.citas} citas` : 'Sin datos aún'}`}
       </p>
 
-      {/* Totals per slot */}
       <div className="flex mb-2 pl-10 gap-1">
         {data.map((d) => (
           <div key={d.hour} className="flex-1 text-center">
             <div className="text-[9px] text-gray-400 leading-tight">Citas</div>
-            <div className={`text-xs font-bold leading-tight ${d.hour === peakHour.hour ? 'text-blue-600' : 'text-gray-700'}`}>
+            <div className={`text-xs font-bold leading-tight ${d.hour === peakHour.hour && peakHour.citas > 0 ? 'text-blue-600' : 'text-gray-700'}`}>
               {d.citas}
             </div>
           </div>

@@ -10,7 +10,7 @@
 //   /api/hospitalizacion/** → hospitalizacion-service
 //   /api/usuarios/**     → usuario-service
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8081';
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
 const TOKEN_KEY = 'sihce_token';
 const USER_KEY = 'sihce_user';

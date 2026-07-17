@@ -6,6 +6,7 @@ import { use } from 'react';
 import VitalSignsForm from '@/components/triaje/VitalSignsForm';
 import { PacienteEspera } from '@/lib/vitals';
 import { getColaTriajeApi } from '@/lib/triaje';
+import { obtenerPaciente } from '@/lib/recepcion';
 
 export default function TriajePacientePage({
   params,
@@ -18,22 +19,34 @@ export default function TriajePacientePage({
   useEffect(() => {
     async function load() {
       try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = new Date().toLocaleDateString('en-CA');
+
+        let base: Partial<PacienteEspera> = {};
         const cola = await getColaTriajeApi(today);
-        const found = cola.find((c) => c.id === id);
+        let found = cola.find((c) => c.pacienteId === id);
         if (found) {
-          setPaciente({
-            id: found.id,
-            ticket: found.ticket,
-            nombre: found.pacienteNombre,
-            dni: '',
-            fechaNac: '',
-            horaLlegada: found.horaLlegada,
-            motivo: found.motivo || '',
-          });
+          base = { id: found.pacienteId, colaId: found.id, ticket: found.ticket, nombre: found.pacienteNombre, horaLlegada: found.horaLlegada, motivo: found.motivo || '' };
         } else {
-          setPaciente(null);
+          const { listRegistrosTriajeApi } = await import('@/lib/triaje');
+          const registros = await listRegistrosTriajeApi(today);
+          const reg = registros.find((r) => r.pacienteId === id);
+          if (reg) {
+            base = { id: reg.pacienteId, ticket: reg.ticket, nombre: reg.pacienteNombre, horaLlegada: reg.horaLlegada, motivo: reg.motivoConsulta };
+          }
         }
+        if (!base.id) { setPaciente(null); return; }
+
+        const pacienteData = await obtenerPaciente(id);
+        setPaciente({
+          id: base.id,
+          colaId: (base as any).colaId,
+          ticket: base.ticket || '',
+          nombre: base.nombre || pacienteData.nombres + ' ' + (pacienteData.apellidoPaterno || ''),
+          dni: pacienteData.nroDocumento || '',
+          fechaNac: pacienteData.fechaNacimiento || '',
+          horaLlegada: base.horaLlegada || '',
+          motivo: base.motivo || '',
+        });
       } catch {
         setPaciente(null);
       }

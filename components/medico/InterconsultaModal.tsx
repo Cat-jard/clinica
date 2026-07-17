@@ -15,13 +15,24 @@ const MEDICOS_POR_ESP: Record<string, string[]> = {
   default: ['Dr. Consultor Disponible'],
 };
 
+interface InterconsultaData {
+  especialidadDestino: string;
+  medicoDestino: string;
+  motivoInterconsulta: string;
+  hallazgosRelevantes: string;
+  preguntaEspecialista: string;
+  urgencia: string;
+  estado: string;
+}
+
 interface InterconsultaModalProps {
   onClose: () => void;
+  onSave: (data: InterconsultaData) => void;
   pacienteNombre: string;
   hallazgos: string;
 }
 
-export default function InterconsultaModal({ onClose, pacienteNombre, hallazgos }: InterconsultaModalProps) {
+export default function InterconsultaModal({ onClose, onSave, pacienteNombre, hallazgos }: InterconsultaModalProps) {
   const [esp, setEsp]           = useState('');
   const [medico, setMedico]     = useState('');
   const [motivo, setMotivo]     = useState('');
@@ -35,6 +46,7 @@ export default function InterconsultaModal({ onClose, pacienteNombre, hallazgos 
 
   function handleEnviar() {
     if (!canEnviar) return;
+    onSave({ especialidadDestino: esp, medicoDestino: medico, motivoInterconsulta: motivo, hallazgosRelevantes: hallaz, preguntaEspecialista: pregunta, urgencia, estado: 'ENVIADA' });
     setEnviada(true);
   }
 

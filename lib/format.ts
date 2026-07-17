@@ -10,9 +10,12 @@ export function formatTime(time: string): string {
   return time ?? '';
 }
 
-/** Today as YYYY-MM-DD */
 export function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
+  const localDate = new Date();
+  const year = localDate.getFullYear();
+  const month = String(localDate.getMonth() + 1).padStart(2, '0');
+  const day = String(localDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /** Calculate age from ISO date */

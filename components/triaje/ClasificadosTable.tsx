@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Eye, CheckCircle2 } from 'lucide-react';
 import { PacienteClasificado, PRIORIDAD_CONFIG, elapsedHHMM, isOverTime } from '@/lib/vitals';
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function ClasificadosTable({ pacientes }: Props) {
+  const router = useRouter();
   const [, tick] = useState(0);
 
   useEffect(() => {
@@ -61,7 +63,10 @@ export default function ClasificadosTable({ pacientes }: Props) {
                   {over && <span className="ml-1 text-[10px] text-red-500 font-semibold">⚠ Excedido</span>}
                 </td>
                 <td className="px-5 py-3">
-                  <button className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium">
+                  <button
+                    onClick={() => router.push(`/triaje/paciente/${p.id}`)}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
                     <Eye size={12} /> Ver Ficha
                   </button>
                 </td>

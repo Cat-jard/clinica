@@ -5,20 +5,26 @@ import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import ModalBase from '@/components/modals/ModalBase';
 import { useToast } from '@/context/ToastContext';
+import { getUsuario } from '@/lib/auth';
 import { Prioridad, SignosVitales, PRIORIDAD_CONFIG, destinoPorPrioridad } from '@/lib/vitals';
+import { iniciarTriajeApi, registrarTriajeApi } from '@/lib/triaje';
 
 interface Props {
   pacienteNombre: string;
   pacienteId: string;
+  colaId?: string;
   signos: SignosVitales;
+  motivo: string;
+  nivelConciencia: string;
+  dolor: number;
   onClose: () => void;
 }
 
 const PRIORIDADES: Prioridad[] = ['I-ROJO', 'II-NARANJA', 'III-AMARILLO', 'IV-VERDE', 'V-AZUL'];
 
-export default function PriorityModal({ pacienteNombre, pacienteId, signos, onClose }: Props) {
+export default function PriorityModal({ pacienteNombre, pacienteId, colaId, signos, motivo, nivelConciencia, dolor, onClose }: Props) {
   const router = useRouter();
-  const { success } = useToast();
+  const { success, error: toastError } = useToast();
   const [selected, setSelected]         = useState<Prioridad | null>(null);
   const [justificacion, setJustificacion] = useState('');
   const [loading, setLoading]           = useState(false);
@@ -32,10 +38,34 @@ export default function PriorityModal({ pacienteNombre, pacienteId, signos, onCl
   async function handleSubmit() {
     if (!selected) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const destino = destinoPorPrioridad(selected);
-    success(`${pacienteNombre} clasificado/a: ${PRIORIDAD_CONFIG[selected].label}. Destino: ${destino}`);
-    router.push('/triaje');
+    try {
+      const usuario = getUsuario();
+      const enfermeraId = usuario?.id || 'unknown';
+
+      if (colaId) {
+        await iniciarTriajeApi(colaId);
+      }
+
+      await registrarTriajeApi({
+        colaId: colaId || '',
+        pacienteId,
+        enfermeraId,
+        signos,
+        motivoConsulta: motivo,
+        nivelConciencia: nivelConciencia as 'Alerta' | 'Verbal' | 'Dolor' | 'Inconsciente',
+        dolor,
+        prioridad: selected,
+        justificacion: justificacion.trim(),
+      });
+
+      const destino = destinoPorPrioridad(selected);
+      success(`${pacienteNombre} clasificado/a: ${PRIORIDAD_CONFIG[selected].label}. Destino: ${destino}`);
+      router.push('/triaje');
+    } catch (err: any) {
+      toastError(err.message || 'No se pudo registrar el triaje');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -118,7 +148,7 @@ export default function PriorityModal({ pacienteNombre, pacienteId, signos, onCl
             canSubmit ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
           }`}
         >
-          {loading ? <><Loader2 size={14} className="animate-spin" /> Asignando…</> : 'Asignar Prioridad y Enviar'}
+          {loading ? <><Loader2 size={14} className="animate-spin" /> Registrando…</> : 'Asignar Prioridad y Enviar'}
         </button>
       </div>
     </ModalBase>

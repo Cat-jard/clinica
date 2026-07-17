@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist, Inter, Poppins } from 'next/font/google';
+import Script from 'next/script';
 import { ToastProvider } from '@/context/ToastContext';
 import './globals.css';
 
@@ -81,7 +82,9 @@ export default function RootLayout({
       <head>
         {/* Aplica el tema guardado (o el del sistema) antes del primer render
             para evitar el destello de tema incorrecto en la landing */}
-        <script
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
           }}

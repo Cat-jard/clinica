@@ -13,6 +13,7 @@ const DURACIONES = ['3 días', '5 días', '7 días', '10 días', '14 días', '1 
 
 interface RecetaModalProps {
   onClose: () => void;
+  onSave: (items: ItemReceta[], estado: string) => void;
   medicacionActual: string;
   pacienteNombre: string;
 }
@@ -23,7 +24,7 @@ const emptyItem = (): ItemReceta => ({
   dosis: '', via: 'Oral', frecuencia: '', duracion: '', cantidad: 1, indicacionesEspeciales: '',
 });
 
-export default function RecetaModal({ onClose, medicacionActual, pacienteNombre }: RecetaModalProps) {
+export default function RecetaModal({ onClose, onSave, medicacionActual, pacienteNombre }: RecetaModalProps) {
   const [items, setItems]       = useState<ItemReceta[]>([emptyItem()]);
   const [showFirma, setShowFirma] = useState(false);
   const [firmada, setFirmada]   = useState(false);
@@ -168,7 +169,7 @@ export default function RecetaModal({ onClose, medicacionActual, pacienteNombre 
             <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">
               Cancelar
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+            <button onClick={() => { onSave(items, 'BORRADOR'); onClose(); }} className="px-4 py-2.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
               Guardar Borrador
             </button>
             <button
@@ -186,7 +187,7 @@ export default function RecetaModal({ onClose, medicacionActual, pacienteNombre 
         <FirmaDigitalModal
           titulo="Firmar Receta Electrónica"
           descripcion={`Se firmará la receta con ${items.length} medicamento(s) para ${pacienteNombre}.`}
-          onConfirm={() => { setFirmada(true); setShowFirma(false); }}
+          onConfirm={() => { setFirmada(true); onSave(items, 'FIRMADA'); setShowFirma(false); }}
           onClose={() => setShowFirma(false)}
         />
       )}

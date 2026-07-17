@@ -215,7 +215,11 @@ export default function VitalSignsForm({ paciente }: Props) {
         <PriorityModal
           pacienteNombre={paciente.nombre}
           pacienteId={paciente.id}
+          colaId={paciente.colaId}
           signos={completeSignos}
+          motivo={motivo}
+          nivelConciencia={nivelConciencia}
+          dolor={dolor}
           onClose={() => setShowPriority(false)}
         />
       )}

@@ -6,6 +6,9 @@ import { Pill, FlaskConical, Users, Monitor, Info } from 'lucide-react';
 interface PlanTratamientoProps {
   indicaciones: string;
   procedimientos: string;
+  recetasCount: number;
+  examenesCount: number;
+  interconsultasCount: number;
   onIndicacionesChange: (val: string) => void;
   onProcedimientosChange: (val: string) => void;
   onOpenReceta: () => void;
@@ -16,6 +19,9 @@ interface PlanTratamientoProps {
 export default function PlanTratamiento({
   indicaciones,
   procedimientos,
+  recetasCount,
+  examenesCount,
+  interconsultasCount,
   onIndicacionesChange,
   onProcedimientosChange,
   onOpenReceta,
@@ -58,7 +64,7 @@ export default function PlanTratamiento({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={onOpenReceta}
-            className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-2xl hover:bg-blue-100 transition-colors text-left"
+            className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-2xl hover:bg-blue-100 transition-colors text-left relative"
           >
             <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
               <Pill size={18} className="text-white" />
@@ -67,11 +73,14 @@ export default function PlanTratamiento({
               <p className="text-xs font-semibold text-blue-800">Receta Electrónica</p>
               <p className="text-[10px] text-blue-500 mt-0.5">Prescribir medicamentos</p>
             </div>
+            {recetasCount > 0 && (
+              <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">{recetasCount}</span>
+            )}
           </button>
 
           <button
             onClick={onOpenExamenes}
-            className="flex items-center gap-3 p-4 bg-purple-50 border border-purple-200 rounded-2xl hover:bg-purple-100 transition-colors text-left"
+            className="flex items-center gap-3 p-4 bg-purple-50 border border-purple-200 rounded-2xl hover:bg-purple-100 transition-colors text-left relative"
           >
             <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center flex-shrink-0">
               <FlaskConical size={18} className="text-white" />
@@ -80,11 +89,14 @@ export default function PlanTratamiento({
               <p className="text-xs font-semibold text-purple-800">Solicitar Exámenes</p>
               <p className="text-[10px] text-purple-500 mt-0.5">Lab · Imágenes · Otros</p>
             </div>
+            {examenesCount > 0 && (
+              <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-purple-500 text-white text-[10px] font-bold flex items-center justify-center">{examenesCount}</span>
+            )}
           </button>
 
           <button
             onClick={onOpenInterconsulta}
-            className="flex items-center gap-3 p-4 bg-teal-50 border border-teal-200 rounded-2xl hover:bg-teal-100 transition-colors text-left"
+            className="flex items-center gap-3 p-4 bg-teal-50 border border-teal-200 rounded-2xl hover:bg-teal-100 transition-colors text-left relative"
           >
             <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center flex-shrink-0">
               <Users size={18} className="text-white" />
@@ -93,6 +105,9 @@ export default function PlanTratamiento({
               <p className="text-xs font-semibold text-teal-800">Interconsulta</p>
               <p className="text-[10px] text-teal-500 mt-0.5">Derivar a especialista</p>
             </div>
+            {interconsultasCount > 0 && (
+              <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-teal-500 text-white text-[10px] font-bold flex items-center justify-center">{interconsultasCount}</span>
+            )}
           </button>
         </div>
       </div>

@@ -10,10 +10,6 @@ const ESTADO_STYLE: Record<CitaDia['estado'], string> = {
   'Atendida':    'bg-green-50 text-green-700',
 };
 
-const PACIENTE_ID: Record<string, string> = {
-  'c1': '1', 'c2': '2', 'c3': '3', 'c4': '4',
-};
-
 interface ColaCitasProps {
   citas: CitaDia[];
 }
@@ -55,7 +51,7 @@ export default function ColaCitas({ citas }: ColaCitasProps) {
                 <td className="py-3 text-right">
                   {c.estado !== 'Atendida' && (
                     <button
-                      onClick={() => router.push(`/medico/atencion/${PACIENTE_ID[c.id] ?? c.id}`)}
+                      onClick={() => router.push(`/medico/atencion/${c.pacienteId}`)}
                       className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                     >
                       Iniciar Atención →

@@ -125,6 +125,48 @@ export async function actualizarEstadoCola(id: string, estado: string): Promise<
   if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo actualizar el estado'));
 }
 
+export interface IngresarColaInput {
+  pacienteId: string;
+  pacienteNombre: string;
+  pacienteDni: string;
+  medicoNombre?: string | null;
+  especialidad?: string | null;
+  motivo?: string | null;
+  citaId?: string | null;
+  horaLlegada?: string | null;
+}
+
+/** Agrega un paciente a la cola de triaje. */
+export async function ingresarCola(input: IngresarColaInput): Promise<ColaItem> {
+  const res = await authFetch('/api/cola/ingresar', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo ingresar a la cola'));
+  return ((await res.json()) as ApiResponse<ColaItem>).data;
+}
+
+// ===================== CONSENTIMIENTO =====================
+
+export interface CreateConsentimientoInput {
+  tipo: string;
+  textoLegal: string;
+  versionTexto: string;
+  firmaBase64?: string;
+  aceptado: boolean;
+  ipOrigen: string;
+  userId: string;
+}
+
+/** Registra un consentimiento informado para un paciente. */
+export async function registrarConsentimiento(pacienteId: string, input: CreateConsentimientoInput): Promise<void> {
+  const res = await authFetch(`/api/pacientes/${pacienteId}/consentimiento`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo registrar el consentimiento'));
+}
+
 // ===================== HELPERS =====================
 
 /** Nombre completo "Nombres Apellido Apellido". */

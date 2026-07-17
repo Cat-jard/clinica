@@ -7,8 +7,11 @@ import { crearCita } from '@/lib/citas';
 import { listarPacientes, nombreCompleto, type PacienteResumen } from '@/lib/recepcion';
 import { listarMedicos, nombreMedico, type Medico } from '@/lib/medicos';
 
-const HOURS = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30',
-               '12:00','12:30','14:00','14:30','15:00','15:30','16:00','16:30'];
+const HOURS = Array.from({ length: 48 }, (_, i) => {
+  const h = String(Math.floor(i / 2)).padStart(2, '0');
+  const m = i % 2 === 0 ? '00' : '30';
+  return `${h}:${m}`;
+});
 
 const TIPOS = ['Consulta Externa', 'Teleconsulta', 'Control', 'Emergencia', 'Procedimiento'];
 
@@ -69,7 +72,11 @@ export default function NewAppointmentModal({ onClose, onCreated }: Props) {
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const today = new Date().toISOString().split('T')[0];
+  const localDate = new Date();
+  const year = localDate.getFullYear();
+  const month = String(localDate.getMonth() + 1).padStart(2, '0');
+  const day = String(localDate.getDate()).padStart(2, '0');
+  const today = `${year}-${month}-${day}`;
 
   function validate() {
     const e: Partial<Record<keyof FormData, string>> = {};

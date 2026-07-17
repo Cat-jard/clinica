@@ -36,7 +36,7 @@ export default function ColaTriaje({ pacientes }: Props) {
             </tr>
           )}
           {pacientes.map((p) => (
-            <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+            <tr key={p.colaId || `${p.id}-${p.ticket}`} className="hover:bg-gray-50/50 transition-colors">
               <td className="px-5 py-3">
                 <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{p.ticket}</span>
               </td>

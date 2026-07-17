@@ -12,6 +12,25 @@ export default function CamasPage() {
   const [camaSel, setCamaSel]   = useState<Cama | null>(null);
   const [allCamas, setAllCamas] = useState<Cama[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newCamaNum, setNewCamaNum] = useState('');
+  const [newCamaServicio, setNewCamaServicio] = useState(SERVICIOS[0]);
+  const [errorCrear, setErrorCrear] = useState('');
+
+  async function handleCreateCama(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newCamaNum.trim()) return;
+    setErrorCrear('');
+    try {
+      await crearCamaApi(newCamaNum.trim(), newCamaServicio);
+      setNewCamaNum('');
+      setShowAddForm(false);
+      await fetchCamas();
+    } catch (err: any) {
+      console.error(err);
+      setErrorCrear(err.message || 'Error al crear la cama');
+    }
+  }
 
   async function fetchCamas() {
     setLoading(true);
@@ -83,15 +102,63 @@ export default function CamasPage() {
           </div>
         </div>
 
-        {allCamas.length === 0 && !loading && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleSeedDemo}
+            onClick={() => {
+              setNewCamaServicio(servicio);
+              setShowAddForm(!showAddForm);
+            }}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
           >
-            <PlusCircle size={14} /> Inicializar Camas Demo
+            <PlusCircle size={14} /> Agregar Cama
           </button>
-        )}
+
+          {allCamas.length === 0 && !loading && (
+            <button
+              onClick={handleSeedDemo}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
+            >
+              <PlusCircle size={14} /> Inicializar Camas Demo
+            </button>
+          )}
+        </div>
       </div>
+
+      {showAddForm && (
+        <form onSubmit={handleCreateCama} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-3">
+          <div className="text-sm font-semibold text-gray-800">Registrar Nueva Cama Hospitalaria</div>
+          <div className="flex gap-3 flex-wrap items-end">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-gray-500">Número de Cama</label>
+              <input
+                type="text"
+                placeholder="Ej. 105"
+                value={newCamaNum}
+                onChange={e => setNewCamaNum(e.target.value)}
+                className="px-3 py-1.5 border border-gray-205 rounded-xl text-xs w-32 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-gray-500">Servicio / Pabellón</label>
+              <select
+                value={newCamaServicio}
+                onChange={e => setNewCamaServicio(e.target.value)}
+                className="px-3 py-1.5 border border-gray-205 rounded-xl text-xs bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {SERVICIOS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <button type="submit" className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-xl transition-all h-8">
+              Guardar Cama
+            </button>
+            <button type="button" onClick={() => setShowAddForm(false)} className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition-all h-8">
+              Cancelar
+            </button>
+          </div>
+          {errorCrear && <p className="text-red-500 text-[11px]">{errorCrear}</p>}
+        </form>
+      )}
 
       {loading ? (
         <div className="bg-white rounded-2xl p-12 text-center text-sm text-gray-400 border border-gray-100">
@@ -114,7 +181,7 @@ export default function CamasPage() {
             <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
               <select value={servicio} onChange={e => setServicio(e.target.value)}
                 className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {finalActiveServices.map(s => <option key={s} value={s}>{s}</option>)}
+                {SERVICIOS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               {/* Leyenda */}
               <div className="flex gap-3 flex-wrap">

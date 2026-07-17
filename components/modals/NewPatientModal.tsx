@@ -46,6 +46,7 @@ export default function NewPatientModal({ onClose, onCreated }: Props) {
   const [form, setForm] = useState<FormData>(INITIAL);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [showConsent, setShowConsent] = useState(false);
+  const [pacienteCreadoId, setPacienteCreadoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const { success, error: toastError } = useToast();
 
@@ -71,11 +72,11 @@ export default function NewPatientModal({ onClose, onCreated }: Props) {
     return Object.keys(e).length === 0;
   }
 
-  /** Persiste el paciente en recepcion-service. Devuelve true si se creó. */
-  async function persistir(): Promise<boolean> {
+  /** Persiste el paciente en recepcion-service. Devuelve el ID si se creó. */
+  async function persistir(): Promise<string | null> {
     setGuardando(true);
     try {
-      await crearPaciente({
+      const paciente = await crearPaciente({
         tipoDocumento: form.tipoDocumento,
         nroDocumento: form.dni,
         apellidoPaterno: form.apellidoPaterno,
@@ -88,10 +89,10 @@ export default function NewPatientModal({ onClose, onCreated }: Props) {
         direccion: form.direccion || undefined,
         aseguradora: form.aseguradora,
       });
-      return true;
+      return paciente.id;
     } catch (err) {
       toastError(err instanceof Error ? err.message : 'No se pudo registrar el paciente.');
-      return false;
+      return null;
     } finally {
       setGuardando(false);
     }
@@ -99,7 +100,8 @@ export default function NewPatientModal({ onClose, onCreated }: Props) {
 
   async function handleSave() {
     if (!validate()) { toastError('Corrija los errores antes de guardar.'); return; }
-    if (!(await persistir())) return;
+    const id = await persistir();
+    if (!id) return;
     success(`Paciente "${fullName}" registrado correctamente.`);
     onCreated?.();
     onClose();
@@ -107,15 +109,18 @@ export default function NewPatientModal({ onClose, onCreated }: Props) {
 
   async function handleSaveAndConsent() {
     if (!validate()) { toastError('Corrija los errores antes de continuar.'); return; }
-    if (!(await persistir())) return;
+    const id = await persistir();
+    if (!id) return;
+    setPacienteCreadoId(id);
     success(`Paciente "${fullName}" registrado correctamente.`);
     onCreated?.();
     setShowConsent(true);
   }
 
-  if (showConsent) {
+  if (showConsent && pacienteCreadoId) {
     return (
       <ConsentModal
+        pacienteId={pacienteCreadoId}
         patientName={fullName}
         onClose={() => setShowConsent(false)}
         onAccepted={() => { onClose(); }}

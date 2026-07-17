@@ -33,6 +33,7 @@ export interface RegistroTriaje {
   enfermeraId: string;
   conCita: boolean;
   timestamp: string;
+  estado?: string;
   signos: SignosVitales;
 }
 
@@ -182,6 +183,16 @@ export async function altaObservacionApi(id: string, tipoAlta: string): Promise<
   if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo dar de alta'));
 }
 
+/** Mark a patient as attended in triage (removes from queue). */
+export async function marcarAtendidoApi(pacienteId: string): Promise<void> {
+  try {
+    await authFetch(`/api/triaje/registros/${pacienteId}/atender`, { method: 'POST' });
+    await authFetch(`/api/citas/paciente/${pacienteId}/atender`, { method: 'POST' }).catch(() => null);
+  } catch {
+    console.error('Error marking patient as attended');
+  }
+}
+
 /** Gets KPIs for dashboard. */
 export async function getTriajeKPIsApi(fecha: string): Promise<TriajeKPIs> {
   try {
@@ -192,5 +203,73 @@ export async function getTriajeKPIsApi(fecha: string): Promise<TriajeKPIs> {
   } catch (error) {
     console.error('Error fetching KPIs:', error);
     return { totalTriajes: 0, rojo: 0, naranja: 0, amarillo: 0, verde: 0, azul: 0 };
+  }
+}
+
+export interface DistribucionPrioridad {
+  prioridad: string;
+  cantidad: number;
+}
+
+export interface LlegadaPorHora {
+  hora: string;
+  cantidad: number;
+}
+
+export interface TopMotivo {
+  motivo: string;
+  cantidad: number;
+}
+
+export interface Spo2Promedio {
+  fecha: string;
+  spo2Promedio: number | null;
+}
+
+/** Gets priority distribution for dashboard. */
+export async function getDistribucionPrioridadesApi(fecha: string): Promise<DistribucionPrioridad[]> {
+  try {
+    const res = await authFetch(`/api/triaje/dashboard/distribucion-prioridades?fecha=${fecha}`);
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Gets arrivals by hour for dashboard. */
+export async function getLlegadasPorHoraApi(fecha: string): Promise<LlegadaPorHora[]> {
+  try {
+    const res = await authFetch(`/api/triaje/dashboard/llegadas-por-hora?fecha=${fecha}`);
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Gets top reasons for visit for dashboard. */
+export async function getTopMotivosApi(fecha: string): Promise<TopMotivo[]> {
+  try {
+    const res = await authFetch(`/api/triaje/dashboard/top-motivos?fecha=${fecha}`);
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Gets average SpO2 for dashboard. */
+export async function getSpo2PromedioApi(fecha: string): Promise<Spo2Promedio> {
+  try {
+    const res = await authFetch(`/api/triaje/dashboard/spo2-promedio?fecha=${fecha}`);
+    if (!res.ok) return { fecha, spo2Promedio: null };
+    const body = await res.json();
+    return body.data as Spo2Promedio;
+  } catch {
+    return { fecha, spo2Promedio: null };
   }
 }

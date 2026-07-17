@@ -5,6 +5,7 @@ import { Plus, Trash2, Loader2 } from 'lucide-react';
 import ModalBase from '@/components/modals/ModalBase';
 import { useToast } from '@/context/ToastContext';
 import { Medicamento, formatoFechaHoraPeru } from '@/lib/vitals';
+import { crearKardexApi, firmarKardexApi } from '@/lib/triaje';
 
 interface Props {
   pacienteNombre: string;
@@ -13,7 +14,7 @@ interface Props {
   onSaved: (firmado: boolean, canvas?: string) => void;
 }
 
-export default function KardexForm({ pacienteNombre, onClose, onSaved }: Props) {
+export default function KardexForm({ pacienteNombre, pacienteId, onClose, onSaved }: Props) {
   const { success, error } = useToast();
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const drawing     = useRef(false);
@@ -73,11 +74,30 @@ export default function KardexForm({ pacienteNombre, onClose, onSaved }: Props) 
     if (!evolucion.trim()) { error('La evolución es obligatoria.'); return; }
     if (firmar && !hasSign) { error('Dibuje su firma para validar el registro.'); return; }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 700));
-    const canvas64 = firmar ? canvasRef.current?.toDataURL() : undefined;
-    success(firmar ? 'Kardex guardado y firmado.' : 'Kardex guardado. Pendiente de firma.');
-    onSaved(firmar, canvas64);
-    setLoading(false);
+    try {
+      const canvas64 = firmar ? canvasRef.current?.toDataURL() : undefined;
+      const created = await crearKardexApi({
+        pacienteId,
+        signos: { pasSistolica: 0, pasDiastolica: 0, frecCardiaca: 0, frecRespiratoria: 0, temperatura: 0, spo2: 0 },
+        ingresosHidricos: Number(ingresos) || 0,
+        egresosHidricos: Number(egresos) || 0,
+        medicamentos: meds.filter((m) => m.nombre).map((m) => ({
+          nombre: m.nombre, dosis: m.dosis, via: m.via, hora: m.hora,
+        })),
+        evolucion: evolucion.trim(),
+      });
+
+      if (firmar && created?.id) {
+        await firmarKardexApi(created.id, canvas64 || '');
+      }
+
+      success(firmar ? 'Kardex guardado y firmado.' : 'Kardex guardado. Pendiente de firma.');
+      onSaved(firmar, canvas64);
+    } catch (err: any) {
+      error(err.message || 'No se pudo guardar el kardex');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

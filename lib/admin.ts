@@ -205,7 +205,7 @@ function genCamas(): Cama[] {
 export const MOCK_CAMAS: Cama[] = genCamas();
 
 export function ocupacionPorServicio(camas: Cama[]): ServicioOcupacion[] {
-  return SERVICIOS.filter(s => camas.some(c => c.servicio === s)).map(servicio => {
+  return SERVICIOS.map(servicio => {
     const delServicio = camas.filter(c => c.servicio === servicio);
     const ocupadas = delServicio.filter(c => c.estado === 'Ocupada').length;
     return {

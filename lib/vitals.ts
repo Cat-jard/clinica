@@ -9,11 +9,12 @@ export type AlertLevel = 'normal' | 'warning' | 'critical';
 
 export interface PacienteEspera {
   id: string;
+  colaId?: string;
   ticket: string;
   nombre: string;
   dni: string;
-  fechaNac: string;     // ISO YYYY-MM-DD
-  horaLlegada: string;  // "08:45"
+  fechaNac: string;
+  horaLlegada: string;
   motivo: string;
 }
 
@@ -185,7 +186,8 @@ export interface ColaTriajeItem {
 
 /** Cola de pacientes pendientes de triaje. */
 export async function obtenerColaTriajeAPI(): Promise<ColaTriajeItem[]> {
-  const res = await authFetch('/api/triaje/cola');
+  const hoy = new Date().toLocaleDateString('en-CA');
+  const res = await authFetch(`/api/triaje/cola?fecha=${hoy}`);
   if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudo cargar la cola de triaje'));
   return ((await res.json()) as ApiResponse<ColaTriajeItem[]>).data ?? [];
 }
@@ -194,6 +196,7 @@ export async function obtenerColaTriajeAPI(): Promise<ColaTriajeItem[]> {
 export function colaAPacienteEspera(c: ColaTriajeItem): PacienteEspera {
   return {
     id: c.pacienteId,
+    colaId: c.id,
     ticket: c.ticket,
     nombre: c.pacienteNombre,
     dni: c.pacienteDni,

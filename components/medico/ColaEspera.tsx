@@ -40,7 +40,7 @@ export default function ColaEspera({ pacientes }: ColaEsperaProps) {
               const cfg  = PRIORIDAD_CONFIG[p.prioridad];
               const over = isOverTime(p.prioridad, p.tiempoEspera);
               return (
-                <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                <tr key={`${p.id}-${p.ticket}`} className="hover:bg-gray-50/50 transition-colors">
                   <td className="py-3 font-mono text-xs font-bold text-gray-500">{p.ticket}</td>
                   <td className="py-3">
                     <p className="font-medium text-gray-800 text-xs">{p.nombre}</p>

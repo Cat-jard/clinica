@@ -43,10 +43,12 @@ export interface ResumenCitas { programadas: number; atendidas: number; cancelad
 interface ApiResponse<T> { data: T; message: string; timestamp: string; }
 interface Page<T> { content: T[]; totalElements: number; totalPages: number; number: number; }
 
-/** Lista citas (paginado). Opcionalmente filtra por estado. */
-export async function listarCitas(estado?: EstadoCita, size = 100): Promise<Cita[]> {
+/** Lista citas (paginado). Opcionalmente filtra por estado y rango de fechas. */
+export async function listarCitas(estado?: EstadoCita, size = 100, desde?: string, hasta?: string): Promise<Cita[]> {
   const params = new URLSearchParams({ page: '0', size: String(size) });
   if (estado) params.set('estado', estado);
+  if (desde) params.set('desde', desde);
+  if (hasta) params.set('hasta', hasta);
   const res = await authFetch(`/api/citas/all?${params}`);
   if (!res.ok) throw new Error(await errorMensaje(res, 'No se pudieron cargar las citas'));
   const json = (await res.json()) as ApiResponse<Page<Cita>>;

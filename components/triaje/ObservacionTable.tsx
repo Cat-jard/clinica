@@ -6,6 +6,7 @@ import KardexForm from './KardexForm';
 import ModalBase from '@/components/modals/ModalBase';
 import { useToast } from '@/context/ToastContext';
 import { PacienteObservacion, PRIORIDAD_CONFIG, elapsedHHMM } from '@/lib/vitals';
+import { altaObservacionApi } from '@/lib/triaje';
 
 type AltaTipo = 'Alta domiciliaria' | 'Hospitalización' | 'Traslado';
 
@@ -20,6 +21,7 @@ export default function ObservacionTable({ pacientes, onUpdate }: Props) {
   const [kardex, setKardex] = useState<PacienteObservacion | null>(null);
   const [alta, setAlta]     = useState<PacienteObservacion | null>(null);
   const [altaTipo, setAltaTipo] = useState<AltaTipo>('Alta domiciliaria');
+  const [altaLoading, setAltaLoading] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => tick((t) => t + 1), 30000);
@@ -50,11 +52,19 @@ export default function ObservacionTable({ pacientes, onUpdate }: Props) {
     setKardex(null);
   }
 
-  function confirmarAlta() {
+  async function confirmarAlta() {
     if (!alta) return;
-    onUpdate(pacientes.filter((p) => p.id !== alta.id));
-    success(`${alta.nombre} — Alta: ${altaTipo}`);
-    setAlta(null);
+    setAltaLoading(true);
+    try {
+      await altaObservacionApi(alta.id, altaTipo);
+      onUpdate(pacientes.filter((p) => p.id !== alta.id));
+      success(`${alta.nombre} — Alta: ${altaTipo}`);
+      setAlta(null);
+    } catch (err: any) {
+      warning(err.message || 'No se pudo dar el alta');
+    } finally {
+      setAltaLoading(false);
+    }
   }
 
   return (
@@ -147,8 +157,9 @@ export default function ObservacionTable({ pacientes, onUpdate }: Props) {
                 </label>
               ))}
             </div>
-            <button onClick={confirmarAlta} className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors">
-              Confirmar Alta
+            <button onClick={confirmarAlta} disabled={altaLoading}
+              className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50">
+              {altaLoading ? 'Procesando…' : 'Confirmar Alta'}
             </button>
           </div>
         </ModalBase>

@@ -1,6 +1,8 @@
-import type { Prioridad, SignosVitales } from './vitals';
+import type { Prioridad } from './vitals';
+import type { SignosVitales as SV } from './vitals';
 
 export type { Prioridad };
+type SignosVitales = SV;
 
 // ── Paciente en cola del médico ──────────────────────────────────────────────
 export interface PacienteMedicoEspera {
@@ -20,6 +22,7 @@ export interface PacienteMedicoEspera {
 // ── Cita del día ─────────────────────────────────────────────────────────────
 export interface CitaDia {
   id: string;
+  pacienteId: string;
   hora: string;
   pacienteNombre: string;
   pacienteDni: string;
@@ -250,6 +253,124 @@ export const EXAMENES_CATALOG = [
 import { authFetch, getUsuario } from './auth';
 import type { Cita } from './citas';
 
+/** Count pending lab results for the logged-in doctor. */
+export async function contarResultadosPendientesApi(): Promise<number> {
+  try {
+    const user = getUsuario();
+    if (!user) return 0;
+    const { listarOrdenesLab } = await import('./laboratorio');
+    const ordenes = await listarOrdenesLab();
+    return ordenes.filter(o =>
+      o.estado === 'Resultados Pendientes' &&
+      o.medicoSolicitante.includes(user.nombre)
+    ).length;
+  } catch {
+    return 0;
+  }
+}
+
+/** Find existing draft or start a new medical attention. */
+export async function buscarOCrearAtencionApi(pacienteId: string): Promise<AtencionResponse | null> {
+  try {
+    const user = getUsuario();
+    if (!user) return null;
+    const res = await authFetch(`/api/atenciones/activa?pacienteId=${pacienteId}&medicoId=${user.id}`);
+    if (!res.ok) return null;
+    const body = await res.json();
+    if (body.data) return body.data;
+    const res2 = await authFetch('/api/atenciones', {
+      method: 'POST',
+      body: JSON.stringify({
+        pacienteId,
+        medicoId: Number(user.id),
+        medicoNombre: `Dr. ${user.nombre} ${user.apellidos}`,
+        especialidad: user.especialidad || 'Medicina General',
+      }),
+    });
+    if (!res2.ok) return null;
+    const body2 = await res2.json();
+    return body2.data || null;
+  } catch {
+    return null;
+  }
+}
+
+export interface AtencionResponse {
+  id: string;
+  pacienteId: string;
+  medicoId: number;
+  estado: string;
+  anamnesis?: Anamnesis;
+  examenFisico?: ExamenFisico;
+  diagnosticos?: DiagnosticoCIE10[];
+  indicacionesGenerales?: string;
+  procedimientosRealizados?: string;
+  recetas?: Receta[];
+  solicitudesExamenes?: SolicitudExamenes[];
+  interconsultas?: Interconsulta[];
+}
+
+/** Save attention draft (anamnesis, exam, diagnostics, etc.). */
+export async function guardarAtencionApi(atencionId: string, data: GuardarAtencionInput): Promise<boolean> {
+  try {
+    const res = await authFetch(`/api/atenciones/${atencionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Sign and finalize an attention. */
+export async function firmarAtencionApi(atencionId: string, firmaBase64: string): Promise<boolean> {
+  try {
+    const user = getUsuario();
+    if (!user) return false;
+    const res = await authFetch(`/api/atenciones/${atencionId}/firmar`, {
+      method: 'POST',
+      body: JSON.stringify({ medicoId: Number(user.id), firmaBase64 }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Fetch patient's attention historial (previous consultations). */
+export async function listarHistorialPacienteApi(pacienteId: string): Promise<HistorialItem[]> {
+  try {
+    const res = await authFetch(`/api/atenciones/paciente/${pacienteId}/historial`);
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export interface GuardarAtencionInput {
+  anamnesis?: Anamnesis;
+  examenFisico?: ExamenFisico;
+  diagnosticos?: DiagnosticoCIE10[];
+  indicacionesGenerales?: string;
+  procedimientosRealizados?: string;
+  recetas?: Receta[];
+  solicitudesExamenes?: SolicitudExamenes[];
+  interconsultas?: Interconsulta[];
+}
+
+export interface HistorialItem {
+  id: string;
+  fechaAtencion: string;
+  medicoNombre: string;
+  especialidad: string;
+  estado: string;
+  diagnosticoPrincipal: string;
+  diagnosticos: string[];
+}
+
 /** Fetch today's appointments for the logged-in doctor. */
 export async function listCitasMedicoApi(): Promise<CitaDia[]> {
   try {
@@ -261,11 +382,12 @@ export async function listCitasMedicoApi(): Promise<CitaDia[]> {
     const content = body.data?.content || body.data || [];
     return content.map((c: Cita) => ({
       id: c.id,
+      pacienteId: c.pacienteId,
       hora: c.horaInicio?.slice(0, 5) || '',
       pacienteNombre: c.pacienteNombre || '',
       pacienteDni: '',
       motivoResumen: c.motivo,
-      estado: (c.estado === 'PROGRAMADA' ? 'Pendiente' : c.estado === 'ATENDIDA' ? 'Atendida' : 'Pendiente') as CitaDia['estado'],
+      estado: c.estado === 'ATENDIDA' ? 'Atendida' : 'Pendiente',
     }));
   } catch {
     return [];
@@ -275,10 +397,10 @@ export async function listCitasMedicoApi(): Promise<CitaDia[]> {
 /** Fetch waiting queue for the doctor (triage classified patients). */
 export async function listColaEsperaMedicoApi(): Promise<PacienteMedicoEspera[]> {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const { getColaTriajeApi, listRegistrosTriajeApi } = await import('./triaje');
+    const today = new Date().toLocaleDateString('en-CA');
+    const { listRegistrosTriajeApi } = await import('./triaje');
     const registros = await listRegistrosTriajeApi(today);
-    return registros.map((r) => ({
+    return registros.filter(r => r.estado !== 'ATENDIDO').map((r) => ({
       id: r.pacienteId,
       ticket: r.ticket,
       nombre: r.pacienteNombre,
@@ -296,14 +418,32 @@ export async function listColaEsperaMedicoApi(): Promise<PacienteMedicoEspera[]>
   }
 }
 
-/** Fetch patient details from recepcion-service. */
+/** Fetch today's appointments for the logged-in doctor. */
 export async function getPacienteMedicoApi(pacienteId: string): Promise<PacienteMedico | null> {
   try {
-    const res = await authFetch(`/api/pacientes/${pacienteId}`);
-    if (!res.ok) return null;
-    const body = await res.json();
+    const [resPac, registros, historialRes] = await Promise.all([
+      authFetch(`/api/pacientes/${pacienteId}`),
+      import('./triaje').then(m => m.listRegistrosTriajeApi(new Date().toLocaleDateString('en-CA'))),
+      authFetch(`/api/atenciones/paciente/${pacienteId}/historial`).catch(() => null),
+    ]);
+    if (!resPac.ok) return null;
+    const body = await resPac.json();
     const p = body.data;
     if (!p) return null;
+
+    const triajeEntry = registros.find(r => r.pacienteId === pacienteId);
+
+    let atencionesPrevias: PacienteMedico['atencionesPrevias'] = [];
+    if (historialRes?.ok) {
+      const histBody = await historialRes.json();
+      const items = histBody.data || [];
+      atencionesPrevias = items.filter((i: HistorialItem) => i.estado === 'FIRMADA').map((i: HistorialItem) => ({
+        fecha: i.fechaAtencion,
+        diagnostico: i.diagnosticoPrincipal || '—',
+        medico: i.medicoNombre || '—',
+      }));
+    }
+
     return {
       id: p.id,
       nombre: p.nombres,
@@ -314,14 +454,14 @@ export async function getPacienteMedicoApi(pacienteId: string): Promise<Paciente
       nroHistoria: p.nroHistoria || '',
       aseguradora: p.aseguradora || 'Particular',
       alergias: p.alergias || '',
-      signos: {},
-      prioridad: 'IV-VERDE',
-      motivoConsulta: '',
+      signos: triajeEntry?.signos || {},
+      prioridad: triajeEntry?.prioridad || 'V-AZUL',
+      motivoConsulta: triajeEntry?.motivoConsulta || '',
       atencionActual: {
         id: '',
         pacienteId: p.id,
         fechaInicio: new Date().toISOString(),
-        anamnesis: { ...anamnesisVacia },
+        anamnesis: { ...anamnesisVacia, motivoConsulta: triajeEntry?.motivoConsulta || '' },
         examenFisico: examenVacio,
         diagnosticos: [],
         indicacionesGenerales: '',
@@ -329,7 +469,7 @@ export async function getPacienteMedicoApi(pacienteId: string): Promise<Paciente
         interconsultas: [],
         estado: 'Borrador',
       },
-      atencionesPrevias: [],
+      atencionesPrevias,
     };
   } catch {
     return null;
@@ -338,10 +478,10 @@ export async function getPacienteMedicoApi(pacienteId: string): Promise<Paciente
 
 // ── Datos mock ───────────────────────────────────────────────────────────────
 export const MOCK_CITAS: CitaDia[] = [
-  { id: 'c1', hora: '08:00', pacienteNombre: 'Carlos Rodríguez Pérez',  pacienteDni: '45231890', motivoResumen: 'Control diabetes',           estado: 'Atendida'    },
-  { id: 'c2', hora: '08:30', pacienteNombre: 'Ana Fernández Llanos',    pacienteDni: '72341567', motivoResumen: 'Dolor abdominal 3 días',     estado: 'En Atención' },
-  { id: 'c3', hora: '09:00', pacienteNombre: 'Pedro Martínez Soto',     pacienteDni: '38901245', motivoResumen: 'Hipertensión mal controlada', estado: 'Confirmada'  },
-  { id: 'c4', hora: '09:30', pacienteNombre: 'Rosa Quispe Mamani',      pacienteDni: '61872340', motivoResumen: 'Cefalea intensa recurrente',  estado: 'Pendiente'   },
+  { id: 'c1', pacienteId: '1', hora: '08:00', pacienteNombre: 'Carlos Rodríguez Pérez',  pacienteDni: '45231890', motivoResumen: 'Control diabetes',           estado: 'Atendida'    },
+  { id: 'c2', pacienteId: '2', hora: '08:30', pacienteNombre: 'Ana Fernández Llanos',    pacienteDni: '72341567', motivoResumen: 'Dolor abdominal 3 días',     estado: 'En Atención' },
+  { id: 'c3', pacienteId: '3', hora: '09:00', pacienteNombre: 'Pedro Martínez Soto',     pacienteDni: '38901245', motivoResumen: 'Hipertensión mal controlada', estado: 'Confirmada'  },
+  { id: 'c4', pacienteId: '4', hora: '09:30', pacienteNombre: 'Rosa Quispe Mamani',      pacienteDni: '61872340', motivoResumen: 'Cefalea intensa recurrente',  estado: 'Pendiente'   },
 ];
 
 export const MOCK_COLA_ESPERA: PacienteMedicoEspera[] = [

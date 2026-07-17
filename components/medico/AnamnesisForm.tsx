@@ -16,7 +16,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
   }
 
   function toggleCheck(key: 'antecedentesPatologicos' | 'habitos', val: string) {
-    const arr = data[key] as string[];
+    const arr = (data[key] || []) as string[];
     set(key, arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val]);
   }
 
@@ -29,7 +29,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
           <label className="label-field">Motivo de Consulta <span className="text-red-500">*</span></label>
           <textarea
             rows={3}
-            value={data.motivoConsulta}
+            value={data.motivoConsulta || ''}
             onChange={e => set('motivoConsulta', e.target.value)}
             placeholder="Frase textual del paciente…"
             className="textarea-field"
@@ -39,7 +39,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
           <label className="label-field">Enfermedad Actual <span className="text-red-500">*</span></label>
           <textarea
             rows={3}
-            value={data.enfermedadActual}
+            value={data.enfermedadActual || ''}
             onChange={e => set('enfermedadActual', e.target.value)}
             placeholder="Inicio, evolución, características, factores asociados…"
             className="textarea-field"
@@ -55,7 +55,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
             <label key={opt} className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={data.antecedentesPatologicos.includes(opt)}
+                checked={(data.antecedentesPatologicos || []).includes(opt)}
                 onChange={() => toggleCheck('antecedentesPatologicos', opt)}
                 className="w-4 h-4 rounded border-gray-300 text-blue-600"
               />
@@ -71,7 +71,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
           <label className="label-field">Antecedentes Quirúrgicos</label>
           <textarea
             rows={2}
-            value={data.antecedentesQuirurgicos}
+            value={data.antecedentesQuirurgicos || ''}
             onChange={e => set('antecedentesQuirurgicos', e.target.value)}
             placeholder="Cirugías previas, año y motivo…"
             className="textarea-field"
@@ -81,7 +81,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
           <label className="label-field">Antecedentes Familiares</label>
           <textarea
             rows={2}
-            value={data.antecedentesFamiliares}
+            value={data.antecedentesFamiliares || ''}
             onChange={e => set('antecedentesFamiliares', e.target.value)}
             placeholder="Enfermedades de familiares directos…"
             className="textarea-field"
@@ -97,7 +97,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
         </label>
         <input
           type="text"
-          value={data.antecedentesAlergicos}
+          value={data.antecedentesAlergicos || ''}
           onChange={e => set('antecedentesAlergicos', e.target.value)}
           placeholder="Ej: Penicilina, AINEs, mariscos… (escribir NINGUNA si no aplica)"
           className={`input-field ${data.antecedentesAlergicos && data.antecedentesAlergicos.toLowerCase() !== 'ninguna' ? 'border-red-300 bg-red-50 focus:ring-red-400' : ''}`}
@@ -112,7 +112,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
             <label key={opt} className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={data.habitos.includes(opt)}
+                checked={(data.habitos || []).includes(opt)}
                 onChange={() => toggleCheck('habitos', opt)}
                 className="w-4 h-4 rounded border-gray-300 text-blue-600"
               />
@@ -127,7 +127,7 @@ export default function AnamnesisForm({ data, onChange }: AnamnesisFormProps) {
         <label className="label-field">Medicación Actual</label>
         <textarea
           rows={2}
-          value={data.medicacionActual}
+          value={data.medicacionActual || ''}
           onChange={e => set('medicacionActual', e.target.value)}
           placeholder="Medicamentos que toma actualmente (nombre, dosis, frecuencia)…"
           className="textarea-field"

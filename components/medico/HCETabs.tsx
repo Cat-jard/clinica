@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Check, FileText, Stethoscope, Tag, ClipboardList, History } from 'lucide-react';
-import type { PacienteMedico, Anamnesis, ExamenFisico, DiagnosticoCIE10 } from '@/lib/medico';
+import type { PacienteMedico, Anamnesis, ExamenFisico, DiagnosticoCIE10, Receta, SolicitudExamenes, ItemReceta, ItemExamen } from '@/lib/medico';
 import AnamnesisForm from './AnamnesisForm';
 import ExamenFisicoForm from './ExamenFisicoForm';
 import DiagnosticoCIE10Form from './DiagnosticoCIE10Form';
@@ -19,11 +19,27 @@ interface HCETabsProps {
   diagnosticos: DiagnosticoCIE10[];
   indicaciones: string;
   procedimientos: string;
+  recetas: Receta[];
+  solicitudesExamenes: SolicitudExamenes[];
+  interconsultas: InterconsultaData[];
   onAnamnesisChange: (a: Anamnesis) => void;
   onExamenChange: (e: ExamenFisico) => void;
   onDiagnosticosChange: (d: DiagnosticoCIE10[]) => void;
   onIndicacionesChange: (v: string) => void;
   onProcedimientosChange: (v: string) => void;
+  onAddReceta: (items: ItemReceta[], estado: string) => void;
+  onAddExamenes: (items: ItemExamen[], estado: string) => void;
+  onAddInterconsulta: (data: InterconsultaData) => void;
+}
+
+interface InterconsultaData {
+  especialidadDestino: string;
+  medicoDestino: string;
+  motivoInterconsulta: string;
+  hallazgosRelevantes: string;
+  preguntaEspecialista: string;
+  urgencia: string;
+  estado: string;
 }
 
 const TABS = [
@@ -38,7 +54,9 @@ type TabId = typeof TABS[number]['id'];
 
 export default function HCETabs({
   paciente, anamnesis, examenFisico, diagnosticos, indicaciones, procedimientos,
+  recetas, solicitudesExamenes, interconsultas,
   onAnamnesisChange, onExamenChange, onDiagnosticosChange, onIndicacionesChange, onProcedimientosChange,
+  onAddReceta, onAddExamenes, onAddInterconsulta,
 }: HCETabsProps) {
   const [tab, setTab]             = useState<TabId>('anamnesis');
   const [showReceta, setShowReceta]       = useState(false);
@@ -101,6 +119,9 @@ export default function HCETabs({
             <PlanTratamiento
               indicaciones={indicaciones}
               procedimientos={procedimientos}
+              recetasCount={recetas.length}
+              examenesCount={solicitudesExamenes.length}
+              interconsultasCount={interconsultas.length}
               onIndicacionesChange={onIndicacionesChange}
               onProcedimientosChange={onProcedimientosChange}
               onOpenReceta={() => setShowReceta(true)}
@@ -127,7 +148,7 @@ export default function HCETabs({
                   </div>
                 )}
               </div>
-              <ResultadosPanel />
+              <ResultadosPanel pacienteId={paciente.id} pacienteDni={paciente.dni} />
             </div>
           )}
         </div>
@@ -136,6 +157,7 @@ export default function HCETabs({
       {showReceta && (
         <RecetaModal
           onClose={() => setShowReceta(false)}
+          onSave={onAddReceta}
           medicacionActual={anamnesis.medicacionActual}
           pacienteNombre={`${paciente.nombre} ${paciente.apellidos}`}
         />
@@ -143,12 +165,14 @@ export default function HCETabs({
       {showExamenes && (
         <ExamenesModal
           onClose={() => setShowExamenes(false)}
+          onSave={onAddExamenes}
           pacienteNombre={`${paciente.nombre} ${paciente.apellidos}`}
         />
       )}
       {showInterconsulta && (
         <InterconsultaModal
           onClose={() => setShowInterconsulta(false)}
+          onSave={onAddInterconsulta}
           pacienteNombre={`${paciente.nombre} ${paciente.apellidos}`}
           hallazgos={examenFisico.examenGeneral}
         />

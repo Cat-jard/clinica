@@ -12,14 +12,14 @@ interface PacienteHeaderProps {
   paciente: PacienteMedico;
   diagnosticos: DiagnosticoCIE10[];
   alergias: string;
+  firmado: boolean;
   onGuardarBorrador: () => void;
   onCerrarFirmar: () => void;
 }
 
-export default function PacienteHeader({ paciente, diagnosticos, alergias, onGuardarBorrador, onCerrarFirmar }: PacienteHeaderProps) {
+export default function PacienteHeader({ paciente, diagnosticos, alergias, firmado, onGuardarBorrador, onCerrarFirmar }: PacienteHeaderProps) {
   const [showResumen, setShowResumen] = useState(false);
   const [showFirma, setShowFirma] = useState(false);
-  const [firmado, setFirmado] = useState(false);
 
   const cfg   = PRIORIDAD_CONFIG[paciente.prioridad];
   const edad  = calcEdad(paciente.fechaNac);
@@ -32,7 +32,7 @@ export default function PacienteHeader({ paciente, diagnosticos, alergias, onGua
   }
 
   function handleFirmaConfirmada() {
-    setFirmado(true);
+    setShowFirma(false);
     onCerrarFirmar();
   }
 

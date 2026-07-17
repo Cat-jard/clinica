@@ -9,6 +9,7 @@ import { EXAMENES_CATALOG } from '@/lib/medico';
 
 interface ExamenesModalProps {
   onClose: () => void;
+  onSave: (items: ItemExamen[], estado: string) => void;
   pacienteNombre: string;
 }
 
@@ -17,7 +18,7 @@ const emptyItem = (): ItemExamen => ({
   origenMuestra: '', ayuno: 'No', urgente: false, indicaciones: '',
 });
 
-export default function ExamenesModal({ onClose, pacienteNombre }: ExamenesModalProps) {
+export default function ExamenesModal({ onClose, onSave, pacienteNombre }: ExamenesModalProps) {
   const [items, setItems]         = useState<ItemExamen[]>([emptyItem()]);
   const [showFirma, setShowFirma] = useState(false);
   const [firmada, setFirmada]     = useState(false);
@@ -124,7 +125,7 @@ export default function ExamenesModal({ onClose, pacienteNombre }: ExamenesModal
 
           <div className="flex gap-3 pt-2 border-t border-gray-100">
             <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">Guardar</button>
+            <button onClick={() => { onSave(items, 'BORRADOR'); onClose(); }} className="px-4 py-2.5 text-sm font-medium text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">Guardar</button>
             <button onClick={() => canFirmar && setShowFirma(true)} disabled={!canFirmar || firmada}
               className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               {firmada ? 'Orden Enviada ✓' : 'Firmar y Enviar'}
@@ -137,7 +138,7 @@ export default function ExamenesModal({ onClose, pacienteNombre }: ExamenesModal
         <FirmaDigitalModal
           titulo="Firmar Orden de Exámenes"
           descripcion={`Se firmará la solicitud de ${items.length} examen(es) para ${pacienteNombre}.`}
-          onConfirm={() => { setFirmada(true); setShowFirma(false); }}
+          onConfirm={() => { setFirmada(true); onSave(items, 'FIRMADA'); setShowFirma(false); }}
           onClose={() => setShowFirma(false)}
         />
       )}
